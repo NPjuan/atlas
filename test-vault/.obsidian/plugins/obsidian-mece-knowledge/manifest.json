@@ -1,0 +1,9 @@
+{
+  "id": "obsidian-mece-knowledge",
+  "name": "MECE Knowledge Mind Map",
+  "version": "0.1.0",
+  "minAppVersion": "1.0.0",
+  "description": "AI-powered knowledge extraction and MECE classification, visualized as an interactive radial mind map.",
+  "author": "ekkopan",
+  "isDesktopOnly": true
+}
