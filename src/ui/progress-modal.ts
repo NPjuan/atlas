@@ -3,8 +3,9 @@ import { ScanProgress } from '../types';
 
 const PHASE_LABELS: Record<string, string> = {
   scanning: '扫描文件',
-  extracting: '提取知识点',
-  classifying: 'MECE 分类',
+  'schema-gen': '生成分类体系',
+  tagging: 'AI 打标签',
+  writing: '写入 frontmatter',
 };
 
 export class ProgressModal extends Modal {

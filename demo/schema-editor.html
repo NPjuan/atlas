@@ -1,0 +1,566 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MECE Schema 树形编辑器</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #262626;
+  --bg-tertiary: #2e2e2e;
+  --bg-hover: #333;
+  --border: #363636;
+  --border-hover: #4a4a4a;
+  --text-normal: #dcddde;
+  --text-muted: #999;
+  --text-faint: #666;
+  --accent: #7f6df2;
+  --accent-hover: #8b7ff5;
+  --accent-bg: rgba(127, 109, 242, 0.1);
+  --success: #4caf50;
+  --error: #e55;
+  --warning: #f0a020;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', 'PingFang SC', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-normal);
+  min-height: 100vh;
+}
+
+#root {
+  max-width: 700px;
+  margin: 0 auto;
+  padding: 24px;
+}
+</style>
+</head>
+<body>
+<div id="root"></div>
+
+<script src="https://unpkg.com/react@18/umd/react.development.js" crossorigin></script>
+<script src="https://unpkg.com/react-dom@18/umd/react-dom.development.js" crossorigin></script>
+<script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+<script type="text/babel" data-type="module">
+// ============================================================
+// MECE Schema 树形编辑器 — 独立 Demo
+// 验证：拖拽排序、重命名、增删节点、深度限制、关联笔记数
+// ============================================================
+
+const { useState, useCallback, useRef, useEffect } = React;
+
+// ---- 工具函数 ----
+
+function generateId() {
+  return Math.random().toString(36).substring(2, 10);
+}
+
+function buildFullPath(name, parentPath) {
+  return parentPath ? `${parentPath}/${name}` : name;
+}
+
+function getNodeDepth(node, nodes, depth = 0) {
+  // 计算一个节点在整棵树中的深度
+  return depth;
+}
+
+function countTotalNodes(nodes) {
+  return nodes.reduce((sum, n) => sum + 1 + countTotalNodes(n.children || []), 0);
+}
+
+function updatePaths(nodes, parentPath = '') {
+  return nodes.map(n => ({
+    ...n,
+    fullPath: buildFullPath(n.name, parentPath),
+    children: updatePaths(n.children || [], buildFullPath(n.name, parentPath))
+  }));
+}
+
+// ---- Mock 数据 ----
+
+const MOCK_TAXONOMY = updatePaths([
+  {
+    id: generateId(), name: '认识论', description: '知识的本质、范围与获取方式',
+    children: [
+      { id: generateId(), name: '先验哲学', description: '康德的先天认知形式', children: [] },
+      { id: generateId(), name: '经验主义', children: [] },
+      { id: generateId(), name: '理性主义', children: [] },
+    ]
+  },
+  {
+    id: generateId(), name: '伦理学', description: '道德行为的理论基础',
+    children: [
+      { id: generateId(), name: '功利主义', description: '最大多数人的最大幸福', children: [] },
+      { id: generateId(), name: '义务论', children: [] },
+      { id: generateId(), name: '美德伦理', children: [] },
+    ]
+  },
+  {
+    id: generateId(), name: '形而上学', description: '存在的本质与结构',
+    children: [
+      { id: generateId(), name: '存在主义', children: [
+        { id: generateId(), name: '萨特', children: [] },
+        { id: generateId(), name: '海德格尔', children: [] },
+      ]},
+      { id: generateId(), name: '柏拉图主义', children: [] },
+    ]
+  },
+  {
+    id: generateId(), name: '逻辑学',
+    children: [
+      { id: generateId(), name: '形式逻辑', children: [] },
+      { id: generateId(), name: '辩证逻辑', children: [] },
+    ]
+  },
+  {
+    id: generateId(), name: '东方哲学',
+    children: [
+      { id: generateId(), name: '道家', children: [] },
+      { id: generateId(), name: '禅宗', children: [] },
+    ]
+  },
+  {
+    id: generateId(), name: '美学', description: '艺术与审美判断',
+    children: []
+  },
+  {
+    id: generateId(), name: '政治哲学',
+    children: [
+      { id: generateId(), name: '正义论', children: [] },
+    ]
+  },
+]);
+
+// Mock 笔记数
+const MOCK_NOTE_COUNTS = {
+  '认识论': 3, '先验哲学': 1, '经验主义': 1, '理性主义': 1,
+  '伦理学': 4, '功利主义': 2, '义务论': 1, '美德伦理': 1,
+  '形而上学': 3, '存在主义': 2, '萨特': 1, '海德格尔': 1, '柏拉图主义': 1,
+  '逻辑学': 2, '形式逻辑': 1, '辩证逻辑': 1,
+  '东方哲学': 3, '道家': 1, '禅宗': 1,
+  '美学': 2,
+  '政治哲学': 1, '正义论': 1,
+};
+
+// ============================================================
+// TreeNode 组件
+// ============================================================
+
+function TreeNode({ node, depth, maxDepth, onRename, onDelete, onAddChild, onMoveUp, onMoveDown, isFirst, isLast }) {
+  const [expanded, setExpanded] = useState(true);
+  const [editing, setEditing] = useState(false);
+  const [editValue, setEditValue] = useState(node.name);
+  const [hover, setHover] = useState(false);
+  const inputRef = useRef(null);
+
+  useEffect(() => {
+    if (editing && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select();
+    }
+  }, [editing]);
+
+  const hasChildren = node.children && node.children.length > 0;
+  const canAddChild = depth < maxDepth - 1;
+  const noteCount = MOCK_NOTE_COUNTS[node.name] || 0;
+
+  const commitRename = () => {
+    const trimmed = editValue.trim();
+    if (trimmed && trimmed !== node.name) {
+      onRename(node.id, trimmed);
+    }
+    setEditing(false);
+    setEditValue(node.name);
+  };
+
+  const icons = ['📁', '📂', '📄'];
+  const icon = icons[Math.min(depth, icons.length - 1)];
+
+  return React.createElement('div', { 
+    style: { marginLeft: depth > 0 ? 20 : 0 }
+  },
+    // 连接线
+    depth > 0 && React.createElement('div', {
+      style: {
+        position: 'absolute',
+        left: depth * 20 - 14,
+        top: 0,
+        bottom: 0,
+        width: 1,
+        background: 'var(--border)',
+        pointerEvents: 'none'
+      }
+    }),
+
+    // 行
+    React.createElement('div', {
+      style: {
+        display: 'flex',
+        alignItems: 'center',
+        gap: 4,
+        padding: '5px 8px',
+        borderRadius: 4,
+        cursor: 'pointer',
+        background: hover ? 'var(--bg-hover)' : 'transparent',
+        transition: 'background 0.12s',
+        userSelect: 'none',
+        position: 'relative',
+      },
+      onMouseEnter: () => setHover(true),
+      onMouseLeave: () => setHover(false),
+    },
+      // 展开/折叠箭头
+      React.createElement('span', {
+        onClick: (e) => { e.stopPropagation(); if (hasChildren) setExpanded(!expanded); },
+        style: {
+          width: 18, height: 18, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: 11, color: hasChildren ? 'var(--text-muted)' : 'transparent',
+          cursor: hasChildren ? 'pointer' : 'default',
+          borderRadius: 3, flexShrink: 0,
+          transition: 'transform 0.15s',
+          transform: expanded ? 'rotate(0deg)' : 'rotate(-90deg)',
+        }
+      }, hasChildren ? '▼' : '·'),
+
+      // 图标
+      React.createElement('span', { style: { fontSize: 14, flexShrink: 0 } }, icon),
+
+      // 名称 or 编辑框
+      editing
+        ? React.createElement('input', {
+            ref: inputRef,
+            value: editValue,
+            onChange: (e) => setEditValue(e.target.value),
+            onBlur: commitRename,
+            onKeyDown: (e) => {
+              if (e.key === 'Enter') commitRename();
+              if (e.key === 'Escape') { setEditing(false); setEditValue(node.name); }
+            },
+            onClick: (e) => e.stopPropagation(),
+            style: {
+              flex: 1, background: 'var(--bg-primary)', border: '1px solid var(--accent)',
+              borderRadius: 3, padding: '1px 6px', fontSize: 13, color: 'var(--text-normal)',
+              outline: 'none', minWidth: 80,
+            }
+          })
+        : React.createElement('span', {
+            style: {
+              flex: 1, fontSize: 13, color: 'var(--text-normal)',
+              fontWeight: depth === 0 ? 600 : 400,
+              overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap',
+            },
+            onDoubleClick: () => { setEditing(true); setEditValue(node.name); }
+          }, node.name),
+
+      // 描述
+      node.description && !editing && React.createElement('span', {
+        style: { fontSize: 11, color: 'var(--text-faint)', maxWidth: 150, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }
+      }, node.description),
+
+      // 笔记数 badge
+      noteCount > 0 && React.createElement('span', {
+        style: {
+          fontSize: 11, color: 'var(--text-muted)', background: 'var(--bg-tertiary)',
+          padding: '0 6px', borderRadius: 8, lineHeight: '18px', flexShrink: 0,
+        }
+      }, noteCount),
+
+      // 操作按钮
+      hover && React.createElement('div', {
+        style: { display: 'flex', gap: 2, flexShrink: 0, marginLeft: 4 },
+        onClick: (e) => e.stopPropagation()
+      },
+        // 上移
+        !isFirst && React.createElement('button', {
+          onClick: () => onMoveUp(node.id),
+          title: '上移',
+          style: btnStyle
+        }, '↑'),
+
+        // 下移
+        !isLast && React.createElement('button', {
+          onClick: () => onMoveDown(node.id),
+          title: '下移',
+          style: btnStyle
+        }, '↓'),
+
+        // 重命名
+        React.createElement('button', {
+          onClick: () => { setEditing(true); setEditValue(node.name); },
+          title: '重命名',
+          style: btnStyle
+        }, '✏'),
+
+        // 添加子节点
+        canAddChild && React.createElement('button', {
+          onClick: () => { onAddChild(node.id); setExpanded(true); },
+          title: `添加子分类（当前深度 ${depth + 1}/${maxDepth}）`,
+          style: { ...btnStyle, color: 'var(--success)' }
+        }, '+'),
+
+        // 删除
+        React.createElement('button', {
+          onClick: () => {
+            if (hasChildren) {
+              if (!confirm(`删除「${node.name}」及其 ${node.children.length} 个子分类？`)) return;
+            }
+            onDelete(node.id);
+          },
+          title: '删除',
+          style: { ...btnStyle, color: 'var(--error)' }
+        }, '×'),
+      ),
+    ),
+
+    // 子节点
+    expanded && hasChildren && React.createElement('div', { style: { position: 'relative' } },
+      node.children.map((child, i) =>
+        React.createElement(TreeNode, {
+          key: child.id, node: child, depth: depth + 1, maxDepth,
+          onRename, onDelete, onAddChild, onMoveUp, onMoveDown,
+          isFirst: i === 0, isLast: i === node.children.length - 1,
+        })
+      )
+    ),
+  );
+}
+
+const btnStyle = {
+  width: 22, height: 22, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  borderRadius: 3, border: 'none', background: 'transparent', color: 'var(--text-muted)',
+  cursor: 'pointer', fontSize: 13, padding: 0, transition: 'all 0.12s',
+};
+
+// ============================================================
+// SchemaEditor 主组件
+// ============================================================
+
+function SchemaEditor() {
+  const [nodes, setNodes] = useState(MOCK_TAXONOMY);
+  const [maxDepth, setMaxDepth] = useState(3);
+  const [history, setHistory] = useState([]);
+
+  const pushHistory = (prev) => setHistory(h => [...h.slice(-20), prev]);
+
+  // ---- CRUD 操作 ----
+
+  const findAndModify = useCallback((nodeList, id, modifier) => {
+    return nodeList.map(n => {
+      if (n.id === id) return modifier(n);
+      return { ...n, children: findAndModify(n.children || [], id, modifier) };
+    });
+  }, []);
+
+  const findAndRemove = useCallback((nodeList, id) => {
+    return nodeList.filter(n => n.id !== id).map(n => ({
+      ...n, children: findAndRemove(n.children || [], id)
+    }));
+  }, []);
+
+  const findAndInsertChild = useCallback((nodeList, parentId, newChild) => {
+    return nodeList.map(n => {
+      if (n.id === parentId) {
+        return { ...n, children: [...(n.children || []), newChild] };
+      }
+      return { ...n, children: findAndInsertChild(n.children || [], parentId, newChild) };
+    });
+  }, []);
+
+  const moveInList = useCallback((nodeList, id, direction) => {
+    // 在当前层级内移动
+    const idx = nodeList.findIndex(n => n.id === id);
+    if (idx >= 0) {
+      const newIdx = idx + direction;
+      if (newIdx >= 0 && newIdx < nodeList.length) {
+        const arr = [...nodeList];
+        [arr[idx], arr[newIdx]] = [arr[newIdx], arr[idx]];
+        return arr;
+      }
+      return nodeList;
+    }
+    // 递归子节点
+    return nodeList.map(n => ({
+      ...n, children: moveInList(n.children || [], id, direction)
+    }));
+  }, []);
+
+  const handleRename = useCallback((id, newName) => {
+    pushHistory(nodes);
+    setNodes(prev => updatePaths(findAndModify(prev, id, n => ({ ...n, name: newName }))));
+  }, [nodes, findAndModify]);
+
+  const handleDelete = useCallback((id) => {
+    pushHistory(nodes);
+    setNodes(prev => updatePaths(findAndRemove(prev, id)));
+  }, [nodes, findAndRemove]);
+
+  const handleAddChild = useCallback((parentId) => {
+    pushHistory(nodes);
+    const newNode = { id: generateId(), name: '新分类', description: '', children: [] };
+    setNodes(prev => updatePaths(findAndInsertChild(prev, parentId, newNode)));
+  }, [nodes, findAndInsertChild]);
+
+  const handleAddRoot = useCallback(() => {
+    pushHistory(nodes);
+    const newNode = { id: generateId(), name: '新分类', description: '', children: [] };
+    setNodes(prev => updatePaths([...prev, newNode]));
+  }, [nodes]);
+
+  const handleMoveUp = useCallback((id) => {
+    pushHistory(nodes);
+    setNodes(prev => updatePaths(moveInList(prev, id, -1)));
+  }, [nodes, moveInList]);
+
+  const handleMoveDown = useCallback((id) => {
+    pushHistory(nodes);
+    setNodes(prev => updatePaths(moveInList(prev, id, 1)));
+  }, [nodes, moveInList]);
+
+  const handleUndo = useCallback(() => {
+    if (history.length === 0) return;
+    const prev = history[history.length - 1];
+    setHistory(h => h.slice(0, -1));
+    setNodes(prev);
+  }, [history]);
+
+  const handleReset = useCallback(() => {
+    pushHistory(nodes);
+    setNodes(MOCK_TAXONOMY);
+  }, [nodes]);
+
+  const totalNodes = countTotalNodes(nodes);
+
+  return React.createElement('div', null,
+    // 标题
+    React.createElement('h1', { style: { fontSize: 20, fontWeight: 600, marginBottom: 4 } }, '🌳 Schema 树形编辑器'),
+    React.createElement('p', { style: { color: 'var(--text-muted)', fontSize: 13, marginBottom: 20 } },
+      '验证分类体系编辑交互：重命名（双击）、增删节点、上下移动、深度限制'),
+
+    // 配置栏
+    React.createElement('div', {
+      style: {
+        display: 'flex', alignItems: 'center', gap: 12, marginBottom: 12,
+        padding: '8px 12px', background: 'var(--bg-secondary)', borderRadius: 6,
+        border: '1px solid var(--border)',
+      }
+    },
+      React.createElement('span', { style: { fontSize: 12, color: 'var(--text-muted)' } }, '最大层级:'),
+      React.createElement('select', {
+        value: maxDepth,
+        onChange: (e) => setMaxDepth(parseInt(e.target.value)),
+        style: {
+          background: 'var(--bg-tertiary)', border: '1px solid var(--border)',
+          color: 'var(--text-normal)', padding: '4px 8px', borderRadius: 4, fontSize: 12,
+        }
+      },
+        React.createElement('option', { value: 2 }, '2 层'),
+        React.createElement('option', { value: 3 }, '3 层'),
+      ),
+      React.createElement('span', { style: { flex: 1 } }),
+      React.createElement('span', { style: { fontSize: 12, color: 'var(--text-muted)' } },
+        `${nodes.length} 个一级分类 · ${totalNodes} 个节点`),
+    ),
+
+    // 树区域
+    React.createElement('div', {
+      style: {
+        border: '1px solid var(--border)', borderRadius: 6,
+        padding: '8px 4px', marginBottom: 12,
+        maxHeight: 'calc(100vh - 280px)', overflowY: 'auto',
+        background: 'var(--bg-secondary)',
+      }
+    },
+      nodes.length === 0
+        ? React.createElement('div', {
+            style: { textAlign: 'center', padding: 40, color: 'var(--text-faint)', fontSize: 13 }
+          }, '暂无分类，点击下方「添加一级分类」开始')
+        : nodes.map((node, i) =>
+            React.createElement(TreeNode, {
+              key: node.id, node, depth: 0, maxDepth,
+              onRename: handleRename, onDelete: handleDelete, onAddChild: handleAddChild,
+              onMoveUp: handleMoveUp, onMoveDown: handleMoveDown,
+              isFirst: i === 0, isLast: i === nodes.length - 1,
+            })
+          )
+    ),
+
+    // 底部操作栏
+    React.createElement('div', {
+      style: {
+        display: 'flex', alignItems: 'center', gap: 8,
+        padding: '10px 0',
+        borderTop: '1px solid var(--border)',
+      }
+    },
+      React.createElement('button', {
+        onClick: handleAddRoot,
+        style: {
+          padding: '6px 14px', borderRadius: 4, border: '1px solid var(--border)',
+          background: 'var(--bg-tertiary)', color: 'var(--text-normal)', fontSize: 12,
+          cursor: 'pointer',
+        }
+      }, '+ 添加一级分类'),
+      React.createElement('button', {
+        onClick: handleUndo,
+        disabled: history.length === 0,
+        style: {
+          padding: '6px 14px', borderRadius: 4, border: '1px solid var(--border)',
+          background: 'var(--bg-tertiary)', color: history.length > 0 ? 'var(--text-normal)' : 'var(--text-faint)',
+          fontSize: 12, cursor: history.length > 0 ? 'pointer' : 'not-allowed',
+        }
+      }, `↩ 撤销 (${history.length})`),
+
+      React.createElement('span', { style: { flex: 1 } }),
+
+      React.createElement('button', {
+        onClick: handleReset,
+        style: {
+          padding: '6px 14px', borderRadius: 4, border: '1px solid var(--border)',
+          background: 'var(--bg-tertiary)', color: 'var(--text-muted)', fontSize: 12,
+          cursor: 'pointer',
+        }
+      }, '重置'),
+      React.createElement('button', {
+        onClick: () => {
+          const output = { taxonomy: nodes, maxDepth };
+          console.log('Schema JSON:', JSON.stringify(output, null, 2));
+          alert('Schema JSON 已输出到 Console（F12 查看）');
+        },
+        style: {
+          padding: '6px 14px', borderRadius: 4, border: '1px solid var(--accent)',
+          background: 'var(--accent)', color: '#fff', fontSize: 12, fontWeight: 500,
+          cursor: 'pointer',
+        }
+      }, '✅ 确认'),
+    ),
+
+    // JSON 预览
+    React.createElement('details', { style: { marginTop: 12 } },
+      React.createElement('summary', {
+        style: { fontSize: 12, color: 'var(--text-muted)', cursor: 'pointer', padding: '4px 0' }
+      }, '📋 查看 JSON 数据'),
+      React.createElement('pre', {
+        style: {
+          background: 'var(--bg-secondary)', border: '1px solid var(--border)',
+          borderRadius: 6, padding: 12, fontSize: 11, lineHeight: 1.5,
+          overflow: 'auto', maxHeight: 300, color: 'var(--text-muted)',
+        }
+      }, JSON.stringify(nodes, null, 2)),
+    ),
+  );
+}
+
+// ============================================================
+// 挂载
+// ============================================================
+
+const root = ReactDOM.createRoot(document.getElementById('root'));
+root.render(React.createElement(SchemaEditor));
+</script>
+</body>
+</html>

@@ -1,0 +1,1082 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MECE Schema 生成验证</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+:root {
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #262626;
+  --bg-tertiary: #2e2e2e;
+  --border: #363636;
+  --text-normal: #dcddde;
+  --text-muted: #999;
+  --text-faint: #666;
+  --accent: #7f6df2;
+  --accent-hover: #8b7ff5;
+  --success: #4caf50;
+  --error: #e55;
+  --warning: #f0a020;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', 'PingFang SC', sans-serif;
+  background: var(--bg-primary);
+  color: var(--text-normal);
+  min-height: 100vh;
+  padding: 24px;
+}
+
+h1 {
+  font-size: 20px;
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.subtitle {
+  color: var(--text-muted);
+  font-size: 13px;
+  margin-bottom: 24px;
+}
+
+.layout {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 20px;
+  max-width: 1400px;
+  margin: 0 auto;
+  height: calc(100vh - 100px);
+}
+
+.panel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.panel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--text-normal);
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.panel-title .badge {
+  font-size: 11px;
+  font-weight: 400;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--bg-tertiary);
+  color: var(--text-muted);
+}
+
+/* ---- Config Row ---- */
+.config-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  align-items: end;
+}
+
+.config-group {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.config-group label {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-weight: 500;
+}
+
+.config-group select,
+.config-group input {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  color: var(--text-normal);
+  padding: 6px 10px;
+  border-radius: 4px;
+  font-size: 13px;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+.config-group select:focus,
+.config-group input:focus {
+  border-color: var(--accent);
+}
+
+.config-group input {
+  width: 260px;
+}
+
+/* ---- Textarea ---- */
+textarea {
+  flex: 1;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  color: var(--text-normal);
+  padding: 12px;
+  border-radius: 6px;
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  resize: none;
+  outline: none;
+  transition: border-color 0.15s;
+}
+
+textarea:focus {
+  border-color: var(--accent);
+}
+
+textarea::placeholder {
+  color: var(--text-faint);
+}
+
+/* ---- Buttons ---- */
+.btn-row {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+button {
+  padding: 8px 16px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg-tertiary);
+  color: var(--text-normal);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+button:hover {
+  background: #3a3a3a;
+  border-color: #4a4a4a;
+}
+
+button:active {
+  transform: scale(0.98);
+}
+
+button.primary {
+  background: var(--accent);
+  color: #fff;
+  border-color: var(--accent);
+  font-weight: 500;
+}
+
+button.primary:hover {
+  background: var(--accent-hover);
+}
+
+button.primary:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+button.small {
+  padding: 4px 10px;
+  font-size: 12px;
+}
+
+/* ---- Status ---- */
+.status {
+  font-size: 12px;
+  color: var(--text-muted);
+  min-height: 18px;
+}
+
+.status.error { color: var(--error); }
+.status.success { color: var(--success); }
+.status.loading { color: var(--warning); }
+
+/* ---- Result ---- */
+.result-area {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.result-json {
+  font-family: 'SF Mono', 'Fira Code', 'Consolas', monospace;
+  font-size: 12px;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ---- Schema Tree Visualization ---- */
+.tree-view {
+  font-size: 13px;
+  line-height: 1.8;
+}
+
+.tree-node {
+  padding-left: 20px;
+  position: relative;
+}
+
+.tree-node::before {
+  content: '';
+  position: absolute;
+  left: 6px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--border);
+}
+
+.tree-node:last-child::before {
+  bottom: 50%;
+}
+
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0;
+}
+
+.tree-icon {
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.tree-name {
+  color: var(--text-normal);
+}
+
+.tree-desc {
+  color: var(--text-faint);
+  font-size: 11px;
+  margin-left: 4px;
+}
+
+.tree-root > .tree-item .tree-name {
+  color: var(--accent);
+  font-weight: 600;
+}
+
+/* ---- Prompt Preview ---- */
+.prompt-preview {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 12px;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+  font-size: 11px;
+  line-height: 1.5;
+  color: var(--text-muted);
+  max-height: 200px;
+  overflow-y: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+/* ---- Tabs ---- */
+.tabs {
+  display: flex;
+  gap: 4px;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0;
+  margin-bottom: 12px;
+}
+
+.tab {
+  padding: 6px 14px;
+  font-size: 12px;
+  color: var(--text-muted);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all 0.15s;
+  background: none;
+  border-top: none;
+  border-left: none;
+  border-right: none;
+}
+
+.tab:hover {
+  color: var(--text-normal);
+}
+
+.tab.active {
+  color: var(--accent);
+  border-bottom-color: var(--accent);
+}
+
+/* ---- Token Estimate ---- */
+.token-info {
+  display: flex;
+  gap: 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  padding: 6px 10px;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+
+.token-info .warn { color: var(--warning); }
+.token-info .ok { color: var(--success); }
+</style>
+</head>
+<body>
+
+<h1>🧠 MECE Schema 生成验证</h1>
+<p class="subtitle">测试 AI 全量扫描笔记库 → 生成 MECE 分类体系的 Prompt 效果</p>
+
+<div class="layout">
+  <!-- 左侧：输入 -->
+  <div class="panel">
+    <div class="panel-title">输入 <span class="badge" id="noteCount">0 篇笔记</span></div>
+
+    <div class="config-row">
+      <div class="config-group">
+        <label>AI Provider</label>
+        <select id="provider">
+          <option value="openai">OpenAI</option>
+          <option value="claude">Claude</option>
+          <option value="deepseek">DeepSeek</option>
+          <option value="ollama">Ollama</option>
+        </select>
+      </div>
+      <div class="config-group">
+        <label>API Key</label>
+        <input type="password" id="apiKey" placeholder="sk-... 或留空(Ollama)">
+      </div>
+      <div class="config-group">
+        <label>模型</label>
+        <input type="text" id="model" placeholder="gpt-4o-mini" style="width:160px">
+      </div>
+    </div>
+
+    <div class="config-row">
+      <div class="config-group">
+        <label>内容模式</label>
+        <select id="contextMode">
+          <option value="full">全文（默认）</option>
+          <option value="first-500">前 500 字</option>
+          <option value="title-only">仅标题</option>
+        </select>
+      </div>
+      <div class="config-group">
+        <label>最大层级</label>
+        <select id="maxDepth">
+          <option value="2">2 层</option>
+          <option value="3" selected>3 层</option>
+        </select>
+      </div>
+      <div class="config-group">
+        <label>分类规则</label>
+        <select id="classificationMode">
+          <option value="mece">MECE 互斥穷尽</option>
+          <option value="discipline">学科分类</option>
+          <option value="custom">自定义</option>
+        </select>
+      </div>
+    </div>
+
+    <div id="tokenInfo" class="token-info">
+      <span>📊 Token 估算：<span id="tokenEst">-</span></span>
+      <span id="tokenWarn"></span>
+    </div>
+
+    <textarea id="notesInput" placeholder="粘贴笔记内容，多篇笔记用 ===SEPARATOR=== 分隔。&#10;&#10;或点击下方「加载 Mock 数据」使用预置的哲学笔记示例。"></textarea>
+
+    <div class="btn-row">
+      <button class="primary" id="btnGenerate" onclick="generateSchema()">🧠 生成分类体系</button>
+      <button class="small" onclick="loadMockData()">📄 加载 Mock 数据</button>
+      <button class="small" onclick="showPrompt()">👁 查看 Prompt</button>
+      <span class="status" id="status"></span>
+    </div>
+  </div>
+
+  <!-- 右侧：结果 -->
+  <div class="panel">
+    <div class="panel-title">结果</div>
+
+    <div class="tabs">
+      <button class="tab active" onclick="switchTab('tree')">🌳 分类树</button>
+      <button class="tab" onclick="switchTab('json')">📋 JSON</button>
+      <button class="tab" onclick="switchTab('prompt')">📝 Prompt</button>
+    </div>
+
+    <div class="result-area" id="resultArea">
+      <div style="color: var(--text-faint); text-align: center; padding: 60px 0;">
+        点击「生成分类体系」开始验证
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// Schema Generation Prompt — 核心逻辑（将来会移到 src/ai/prompts.ts）
+// ============================================================
+
+const MODE_DESCRIPTIONS = {
+  mece: 'MECE（Mutually Exclusive, Collectively Exhaustive）互斥穷尽分类：每个分类代表一个独立维度，分类之间不重叠，整体覆盖全部内容',
+  discipline: '学科分类：按照学术学科体系分类，如哲学、数学、计算机科学等',
+  custom: '自定义分类'
+};
+
+function buildSchemaGenerationPrompt(notes, maxDepth, classificationMode) {
+  const modeDesc = MODE_DESCRIPTIONS[classificationMode] || '';
+
+  // 构建笔记概览
+  const notesSummary = notes.map((n, i) => {
+    let entry = `### 笔记 ${i + 1}: ${n.fileName}`;
+    if (n.existingTags && n.existingTags.length > 0) {
+      entry += `\n已有标签: ${n.existingTags.join(', ')}`;
+    }
+    if (n.content) {
+      entry += `\n${n.content}`;
+    }
+    return entry;
+  }).join('\n\n');
+
+  return `你是一个知识分类架构师。
+
+## 任务
+
+分析以下 ${notes.length} 篇笔记的全部内容，设计一个完整的分类体系（Taxonomy）。这个分类体系将用于后续给每篇笔记打标签。
+
+## 分类规则
+${modeDesc}
+
+## 要求
+
+1. **全局视角**：你必须通读所有笔记后再设计分类，确保分类体系覆盖全部内容
+2. **层级结构**：最多 ${maxDepth} 层，格式为 "一级/二级/三级"
+3. **一级分类**：控制在 3~8 个，每个代表一个主要知识领域
+4. **精简原则**：宁少勿多，避免过度细分。只在内容确实丰富时才创建子分类
+5. **命名规范**：使用中文，简洁明确，2~6 个字
+6. **每个分类必须有意义**：至少要有 2 篇笔记才值得创建一个分类
+7. 可以为分类添加简短描述（description），帮助后续 AI 更准确地选择分类
+
+## 输出格式（严格 JSON，不要包裹 markdown 代码块）
+
+{
+  "taxonomy": [
+    {
+      "name": "一级分类名",
+      "description": "可选：这个分类包含什么",
+      "children": [
+        {
+          "name": "二级分类名",
+          "description": "可选描述",
+          "children": [
+            { "name": "三级分类名", "children": [] }
+          ]
+        }
+      ]
+    }
+  ]
+}
+
+## 示例
+
+对于一组编程笔记，好的分类体系：
+{
+  "taxonomy": [
+    {
+      "name": "前端",
+      "description": "浏览器端技术",
+      "children": [
+        { "name": "React", "children": [] },
+        { "name": "CSS", "children": [] }
+      ]
+    },
+    {
+      "name": "后端",
+      "children": [
+        { "name": "数据库", "children": [] },
+        { "name": "API设计", "children": [] }
+      ]
+    }
+  ]
+}
+
+坏的分类（过度细分）：
+一级就有 15 个分类，每个只有 1 篇笔记 → 分类体系没有归纳能力
+
+## 笔记内容（共 ${notes.length} 篇）
+
+${notesSummary}`;
+}
+
+// ============================================================
+// Token 估算
+// ============================================================
+
+function estimateTokens(text) {
+  // 粗略估算：中文 ~1.5 token/字，英文 ~0.25 token/word
+  let tokens = 0;
+  for (const ch of text) {
+    if (/[\u4e00-\u9fff]/.test(ch)) tokens += 1.5;
+    else if (/[a-zA-Z]/.test(ch)) tokens += 0.25;
+    else tokens += 0.5;
+  }
+  return Math.round(tokens);
+}
+
+// ============================================================
+// 笔记解析
+// ============================================================
+
+function parseNotesInput(text) {
+  const sections = text.split('===SEPARATOR===').map(s => s.trim()).filter(s => s);
+  return sections.map(section => {
+    const lines = section.split('\n');
+    // 尝试提取文件名（# 开头或第一行）
+    let fileName = 'untitled.md';
+    let content = section;
+    let existingTags = [];
+
+    // 解析 frontmatter
+    if (section.startsWith('---')) {
+      const fmEnd = section.indexOf('---', 3);
+      if (fmEnd > 0) {
+        const fm = section.substring(3, fmEnd);
+        content = section.substring(fmEnd + 3).trim();
+        // 提取 tags
+        const tagsMatch = fm.match(/tags:\s*\n((?:\s+-\s+.+\n?)*)/);
+        if (tagsMatch) {
+          existingTags = tagsMatch[1].match(/^\s+-\s+(.+)/gm)?.map(l => l.replace(/^\s+-\s+/, '').trim()) || [];
+        }
+      }
+    }
+
+    // 提取标题
+    const h1Match = content.match(/^#\s+(.+)$/m);
+    if (h1Match) fileName = h1Match[1].trim() + '.md';
+    else if (lines[0] && !lines[0].startsWith('---')) fileName = lines[0].trim().substring(0, 50) + '.md';
+
+    return { fileName, content, existingTags };
+  });
+}
+
+function applyContextMode(notes, mode) {
+  return notes.map(n => {
+    if (mode === 'title-only') {
+      return { ...n, content: '' };
+    }
+    if (mode === 'first-500') {
+      return { ...n, content: n.content.substring(0, 500) };
+    }
+    return n; // full
+  });
+}
+
+// ============================================================
+// AI 调用
+// ============================================================
+
+async function callAI(prompt, provider, apiKey, model) {
+  const configs = {
+    openai: {
+      url: 'https://api.openai.com/v1/chat/completions',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: {
+        model: model || 'gpt-4o-mini',
+        messages: [
+          { role: 'system', content: '你是一个精确的知识分类架构师。始终返回有效的 JSON。' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.1,
+        response_format: { type: 'json_object' }
+      },
+      extract: (data) => data.choices?.[0]?.message?.content || ''
+    },
+    deepseek: {
+      url: 'https://api.deepseek.com/v1/chat/completions',
+      headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${apiKey}` },
+      body: {
+        model: model || 'deepseek-chat',
+        messages: [
+          { role: 'system', content: '你是一个精确的知识分类架构师。始终返回有效的 JSON。' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.1,
+        response_format: { type: 'json_object' }
+      },
+      extract: (data) => data.choices?.[0]?.message?.content || ''
+    },
+    claude: {
+      url: 'https://api.anthropic.com/v1/messages',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01'
+      },
+      body: {
+        model: model || 'claude-sonnet-4-20250514',
+        max_tokens: 8192,
+        messages: [{ role: 'user', content: prompt + '\n\n请直接返回 JSON，不要包裹在 markdown 代码块中。' }]
+      },
+      extract: (data) => data.content?.find(c => c.type === 'text')?.text || ''
+    },
+    ollama: {
+      url: 'http://localhost:11434/v1/chat/completions',
+      headers: { 'Content-Type': 'application/json' },
+      body: {
+        model: model || 'qwen2.5',
+        messages: [
+          { role: 'system', content: '你是一个精确的知识分类架构师。始终返回有效的 JSON。' },
+          { role: 'user', content: prompt }
+        ],
+        temperature: 0.1
+      },
+      extract: (data) => data.choices?.[0]?.message?.content || ''
+    }
+  };
+
+  const cfg = configs[provider];
+  if (!cfg) throw new Error(`Unknown provider: ${provider}`);
+
+  const res = await fetch(cfg.url, {
+    method: 'POST',
+    headers: cfg.headers,
+    body: JSON.stringify(cfg.body)
+  });
+
+  if (!res.ok) {
+    const errText = await res.text();
+    throw new Error(`API 错误 (${res.status}): ${errText.substring(0, 300)}`);
+  }
+
+  const data = await res.json();
+  return cfg.extract(data);
+}
+
+// ============================================================
+// JSON 安全解析
+// ============================================================
+
+function parseJSON(raw) {
+  let cleaned = raw.trim();
+  // 去除 markdown 代码块
+  const codeBlockMatch = cleaned.match(/```(?:json)?\s*\n?([\s\S]*?)```/);
+  if (codeBlockMatch) cleaned = codeBlockMatch[1].trim();
+  // 找到第一个 { 或 [
+  const jsonStart = cleaned.search(/[{\[]/);
+  if (jsonStart > 0) cleaned = cleaned.slice(jsonStart);
+
+  try {
+    return JSON.parse(cleaned);
+  } catch {
+    // 尝试修复截断 JSON
+    const stack = [];
+    let inString = false, escape = false;
+    for (const ch of cleaned) {
+      if (escape) { escape = false; continue; }
+      if (ch === '\\' && inString) { escape = true; continue; }
+      if (ch === '"') { inString = !inString; continue; }
+      if (inString) continue;
+      if (ch === '{') stack.push('}');
+      else if (ch === '[') stack.push(']');
+      else if (ch === '}' || ch === ']') stack.pop();
+    }
+    if (inString) cleaned += '"';
+    while (stack.length > 0) cleaned += stack.pop();
+    return JSON.parse(cleaned);
+  }
+}
+
+// ============================================================
+// 树形可视化
+// ============================================================
+
+function renderTree(nodes, depth = 0) {
+  if (!nodes || nodes.length === 0) return '';
+  const icons = ['📁', '📂', '📄'];
+  return nodes.map(node => {
+    const icon = icons[Math.min(depth, icons.length - 1)];
+    const desc = node.description ? `<span class="tree-desc">— ${node.description}</span>` : '';
+    const children = node.children && node.children.length > 0
+      ? `<div class="tree-node">${renderTree(node.children, depth + 1)}</div>`
+      : '';
+    return `<div class="tree-item">${''.padStart(depth * 2)}<span class="tree-icon">${icon}</span><span class="tree-name">${node.name}</span>${desc}</div>${children}`;
+  }).join('');
+}
+
+function countNodes(nodes) {
+  if (!nodes) return 0;
+  return nodes.reduce((sum, n) => sum + 1 + countNodes(n.children), 0);
+}
+
+function maxTreeDepth(nodes, depth = 1) {
+  if (!nodes || nodes.length === 0) return depth - 1;
+  return Math.max(...nodes.map(n =>
+    n.children && n.children.length > 0 ? maxTreeDepth(n.children, depth + 1) : depth
+  ));
+}
+
+// ============================================================
+// 全局状态
+// ============================================================
+
+let currentResult = null;
+let currentPrompt = '';
+let currentTab = 'tree';
+
+// ============================================================
+// UI 交互
+// ============================================================
+
+function setStatus(msg, type = '') {
+  const el = document.getElementById('status');
+  el.textContent = msg;
+  el.className = 'status ' + type;
+}
+
+function updateTokenEstimate() {
+  const text = document.getElementById('notesInput').value;
+  const mode = document.getElementById('contextMode').value;
+  const notes = parseNotesInput(text);
+  const processed = applyContextMode(notes, mode);
+  const prompt = buildSchemaGenerationPrompt(processed, 3, 'mece');
+  const tokens = estimateTokens(prompt);
+
+  document.getElementById('noteCount').textContent = `${notes.length} 篇笔记`;
+  document.getElementById('tokenEst').textContent = `~${tokens.toLocaleString()} tokens`;
+
+  const warnEl = document.getElementById('tokenWarn');
+  if (tokens > 120000) {
+    warnEl.innerHTML = '<span class="warn">⚠️ 超过 120K，建议降级为"前 500 字"</span>';
+  } else if (tokens > 60000) {
+    warnEl.innerHTML = '<span class="warn">⚡ 较大，确保模型支持长上下文</span>';
+  } else {
+    warnEl.innerHTML = '<span class="ok">✓ OK</span>';
+  }
+}
+
+function switchTab(tab) {
+  currentTab = tab;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.tab').forEach(t => {
+    if (t.textContent.includes(tab === 'tree' ? '分类树' : tab === 'json' ? 'JSON' : 'Prompt'))
+      t.classList.add('active');
+  });
+  renderResult();
+}
+
+function renderResult() {
+  const area = document.getElementById('resultArea');
+
+  if (currentTab === 'prompt') {
+    area.innerHTML = `<div class="prompt-preview" style="max-height:none">${escapeHtml(currentPrompt || '尚未生成 Prompt')}</div>`;
+    return;
+  }
+
+  if (!currentResult) {
+    area.innerHTML = '<div style="color: var(--text-faint); text-align: center; padding: 60px 0;">点击「生成分类体系」开始验证</div>';
+    return;
+  }
+
+  if (currentTab === 'json') {
+    area.innerHTML = `<div class="result-json">${escapeHtml(JSON.stringify(currentResult, null, 2))}</div>`;
+    return;
+  }
+
+  // tree view
+  const taxonomy = currentResult.taxonomy || [];
+  const nodeCount = countNodes(taxonomy);
+  const depth = maxTreeDepth(taxonomy);
+  area.innerHTML = `
+    <div style="margin-bottom: 12px; font-size: 12px; color: var(--text-muted);">
+      📊 ${taxonomy.length} 个一级分类 · ${nodeCount} 个节点 · 最大深度 ${depth} 层
+    </div>
+    <div class="tree-view tree-root">${renderTree(taxonomy)}</div>
+  `;
+}
+
+function escapeHtml(str) {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
+function showPrompt() {
+  const text = document.getElementById('notesInput').value;
+  const mode = document.getElementById('contextMode').value;
+  const maxDepth = parseInt(document.getElementById('maxDepth').value);
+  const classMode = document.getElementById('classificationMode').value;
+  const notes = applyContextMode(parseNotesInput(text), mode);
+  currentPrompt = buildSchemaGenerationPrompt(notes, maxDepth, classMode);
+  switchTab('prompt');
+}
+
+async function generateSchema() {
+  const text = document.getElementById('notesInput').value;
+  if (!text.trim()) { setStatus('请先输入笔记内容', 'error'); return; }
+
+  const provider = document.getElementById('provider').value;
+  const apiKey = document.getElementById('apiKey').value;
+  const model = document.getElementById('model').value;
+  const mode = document.getElementById('contextMode').value;
+  const maxDepth = parseInt(document.getElementById('maxDepth').value);
+  const classMode = document.getElementById('classificationMode').value;
+
+  if (provider !== 'ollama' && !apiKey) { setStatus('请填入 API Key', 'error'); return; }
+
+  const notes = applyContextMode(parseNotesInput(text), mode);
+  currentPrompt = buildSchemaGenerationPrompt(notes, maxDepth, classMode);
+
+  const btn = document.getElementById('btnGenerate');
+  btn.disabled = true;
+  setStatus('⏳ AI 分析中...', 'loading');
+
+  const startTime = Date.now();
+
+  try {
+    const raw = await callAI(currentPrompt, provider, apiKey, model);
+    const result = parseJSON(raw);
+    currentResult = result;
+
+    const elapsed = ((Date.now() - startTime) / 1000).toFixed(1);
+    const taxonomy = result.taxonomy || [];
+    setStatus(`✅ 生成成功（${elapsed}s）· ${countNodes(taxonomy)} 个节点`, 'success');
+    switchTab('tree');
+  } catch (e) {
+    setStatus(`❌ ${e.message}`, 'error');
+    console.error('Schema generation error:', e);
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// ============================================================
+// Mock 数据
+// ============================================================
+
+function loadMockData() {
+  const mock = `---
+tags:
+  - 功利主义
+  - 边沁
+  - 密尔
+date: 2025-03-20
+---
+
+# 功利主义伦理学
+
+## 基本原则
+
+功利主义（Utilitarianism）的核心原则极为简洁：一个行为的道德价值取决于它产生的总体幸福（或快乐）的多少。正确的行为是那些产生「最大多数人的最大幸福」的行为。
+
+边沁提出了"快乐计算"——量化快乐的强度、持续时间、确定性、远近等维度。密尔则区分了快乐的质量差异。
+
+===SEPARATOR===
+
+---
+tags: []
+date: 2025-03-12
+---
+
+# 康德的先验哲学
+
+## 哥白尼式革命
+
+康德在《纯粹理性批判》中提出了一个颠覆性的认识论转向：不是我们的认识去符合对象，而是对象符合我们的认识形式。
+
+先验感性论：时间和空间不是客观存在的属性，而是我们感知世界的先天直觉形式。
+先验分析论：因果性、实体性等纯粹知性概念（范畴）是我们整理经验的先天框架。
+二律背反：理性试图超越经验范围时必然陷入矛盾。
+
+===SEPARATOR===
+
+---
+tags:
+  - 禅宗
+  - 佛教
+date: 2025-03-25
+---
+
+# 禅宗与顿悟
+
+## 什么是禅
+
+禅（Zen/Chan）是佛教传入中国后与道家思想融合的产物。它强调：直指人心、见性成佛、不立文字、教外别传。
+
+### 顿悟与渐悟
+
+南宗禅（惠能）主张顿悟——觉悟不是渐进过程，而是突然的、整体的转变。
+北宗禅（神秀）主张渐悟——通过渐进的修行达到觉悟。
+
+===SEPARATOR===
+
+---
+tags: []
+date: 2025-03-28
+---
+
+# 柏拉图的理型论
+
+柏拉图认为，我们感官所感知到的物质世界只是真正实在的不完美摹本。真正的实在是超越时空的"理型"（Forms/Ideas）。
+
+洞穴比喻：大多数人像被锁在洞穴中的囚徒，只能看到墙壁上的影子。理型论的知识就是走出洞穴，看到真正的阳光。
+
+===SEPARATOR===
+
+---
+tags:
+  - 存在主义
+date: 2025-04-01
+---
+
+# 萨特的存在主义
+
+## 存在先于本质
+
+萨特最著名的命题：对于人来说，存在先于本质。人没有预先设定的本质或目的，你首先存在，然后通过选择来定义自己。
+
+"人是被判定为自由的"——我们无法逃避选择的责任。
+
+自欺（Bad Faith）：试图否认自己的自由，把自己当作物来看待。
+
+===SEPARATOR===
+
+---
+tags: []
+date: 2025-04-03
+---
+
+# 罗尔斯的正义论
+
+## 原初状态与无知之幕
+
+罗尔斯设想了一个"原初状态"：人们在"无知之幕"（Veil of Ignorance）后面选择正义原则——他们不知道自己在社会中的地位、能力、运气。
+
+两个正义原则：
+1. 平等自由原则：每个人都有平等的基本自由
+2. 差异原则：社会和经济不平等只有在有利于最弱势群体时才是正义的
+
+===SEPARATOR===
+
+---
+tags: []
+date: 2025-04-05
+---
+
+# 维特根斯坦——语言的界限
+
+## 前期：逻辑图像论
+
+《逻辑哲学论》的核心：语言是世界的图像。有意义的命题必须对应可能的事态。"凡是不可说的，必须保持沉默。"
+
+## 后期：语言游戏
+
+《哲学研究》推翻了自己的前期理论。语言的意义不在于对应关系，而在于使用——"一个词的意义就是它在语言中的使用"。
+
+家族相似性、私人语言论证是后期的核心概念。
+
+===SEPARATOR===
+
+---
+tags: []
+date: 2025-04-07
+---
+
+# 心灵哲学——意识的难题
+
+## 意识的难问题
+
+查尔默斯提出的"难问题"（Hard Problem）：为什么大脑的物理过程会产生主观体验（感质 qualia）？
+
+思想实验：
+- 玛丽的房间：色彩科学家从未见过颜色
+- 哲学僵尸：行为与我们完全相同但没有意识体验
+- 蝙蝠是什么感觉：主观体验的不可还原性
+
+===SEPARATOR===
+
+---
+tags: []
+date: 2025-04-08
+---
+
+# 科学哲学——波普尔与库恩
+
+## 波普尔的可证伪性
+
+科学理论的标准不是"可验证"而是"可证伪"。一个理论越能经受住严格检验，就越有力。
+
+## 库恩的范式革命
+
+科学不是线性进步，而是"范式转换"：常规科学 → 反常积累 → 危机 → 科学革命 → 新范式。
+
+不可通约性：旧范式和新范式之间无法完全翻译。
+
+===SEPARATOR===
+
+---
+tags: []
+date: 2025-04-10
+---
+
+# 道家哲学——老子与庄子
+
+## 道的概念
+
+老子《道德经》：道可道，非常道。道是万物的本源，不可被语言完全描述。
+
+## 无为
+
+无为不是"什么都不做"，而是"不违反自然规律地行动"。水的比喻：水利万物而不争。
+
+## 庄子的齐物论
+
+万物平等，是非只是相对的。庄子梦蝶：你怎么知道是庄子梦见了蝴蝶，还是蝴蝶梦见了庄子？
+
+===SEPARATOR===
+
+---
+tags: []
+date: 2025-04-12
+---
+
+# 美学——什么是艺术
+
+## 模仿论到制度论
+
+柏拉图：艺术是现实的模仿的模仿（离真理很远）
+亚里士多德：艺术通过模仿揭示普遍性
+康德：审美判断是"无目的的合目的性"
+丹托/迪基：艺术是被艺术界（artworld）所承认的东西——制度论
+
+## AI 与艺术
+
+如果 AI 能创作"艺术品"，这对艺术的定义意味着什么？`;
+
+  document.getElementById('notesInput').value = mock;
+  updateTokenEstimate();
+  setStatus('✅ 已加载 11 篇哲学笔记 mock 数据', 'success');
+}
+
+// ---- Event Listeners ----
+
+document.getElementById('notesInput').addEventListener('input', updateTokenEstimate);
+document.getElementById('contextMode').addEventListener('change', updateTokenEstimate);
+
+// 初始化
+updateTokenEstimate();
+</script>
+</body>
+</html>

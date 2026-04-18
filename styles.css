@@ -1,30 +1,341 @@
 /* ============================================================
-   MECE Knowledge Mind Map — Plugin Styles
+   MECE V3 — Plugin Styles
    ============================================================ */
 
-/* ---- 视图主布局 ---- */
-.mece-view-wrapper {
+/* ---- 面板根容器 ---- */
+.mece-panel-root {
   display: flex;
-  width: 100%;
+  flex-direction: column;
   height: 100%;
-  overflow: hidden;
 }
 
-.mece-detail-container {
+/* ---- 工具栏 ---- */
+.mece-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  flex-shrink: 0;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.mece-toolbar-left {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.mece-toolbar-right {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.mece-toolbar-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  white-space: nowrap;
+}
+
+.mece-toolbar-btn:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--background-modifier-border-hover);
+}
+
+.mece-toolbar-btn:active {
+  background: var(--background-modifier-active-hover);
+}
+
+.mece-toolbar-btn-primary {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+}
+
+.mece-toolbar-btn-primary:hover {
+  background: var(--interactive-accent-hover);
+  border-color: var(--interactive-accent-hover);
+}
+
+.mece-toolbar-btn-icon {
+  display: inline-flex;
+  align-items: center;
+}
+
+.mece-toolbar-btn-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mece-toolbar-btn-label {
+  line-height: 1;
+}
+
+.mece-toolbar-stats {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* ---- AI 状态指示条 ---- */
+.mece-ai-status {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  font-size: 12px;
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+
+.mece-ai-status-ok {
+  background: var(--background-primary);
+  color: var(--text-muted);
+}
+
+.mece-ai-status-warn {
+  background: transparent;
+  color: var(--text-error, #e55);
+}
+
+.mece-ai-status-icon {
+  display: inline-flex;
+  align-items: center;
   flex-shrink: 0;
 }
 
-/* ---- 思维导图容器 ---- */
-.mece-mindmap-container {
+.mece-ai-status-icon svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mece-ai-status-ok .mece-ai-status-icon {
+  color: var(--text-success, #4caf50);
+}
+
+.mece-ai-status-warn .mece-ai-status-icon {
+  color: var(--text-error, #e55);
+}
+
+.mece-ai-status-text {
   flex: 1;
-  height: 100%;
+  line-height: 1.4;
+}
+
+/* 覆盖 Obsidian 的默认 button 样式 */
+.mece-ai-status .mece-ai-status-action,
+.mece-ai-status .mece-topbar-folder {
+  box-shadow: none !important;
+}
+
+.mece-ai-status-action {
+  display: inline-flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  padding: 0 !important;
+  border-radius: 4px;
+  border: none !important;
+  background: transparent !important;
+  color: var(--text-muted);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+  flex-shrink: 0;
+}
+
+.mece-ai-status-action svg {
+  width: 14px;
+  height: 14px;
+}
+
+.mece-ai-status-action:hover {
+  background: var(--background-modifier-hover) !important;
+  color: var(--text-normal);
+}
+
+/* 文件夹选择按钮 */
+.mece-topbar-folder {
+  display: inline-flex !important;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 8px !important;
+  border-radius: 4px;
+  border: none !important;
+  background: transparent !important;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  white-space: nowrap;
+  max-width: 160px;
+  transition: all 0.15s ease;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.mece-topbar-folder:hover {
+  background: var(--background-modifier-hover) !important;
+  color: var(--text-normal);
+}
+
+.mece-topbar-folder-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+}
+
+.mece-topbar-folder-icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.mece-topbar-folder-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.mece-topbar-folder-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* ---- 面板内容区 ---- */
+.mece-panel-content {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px;
+}
+
+/* ---- 脑图区域 ---- */
+.mece-graph-area {
+  flex: 1;
+  min-height: 0;
   overflow: hidden;
   position: relative;
 }
 
-.mece-mindmap-container svg {
-  width: 100%;
-  height: 100%;
+.mece-graph-area canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+/* ---- 脑图右上角控制栏 ---- */
+.mece-graph-toolbar {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  z-index: 10;
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding: 4px;
+  background: rgba(32, 32, 32, 0.85);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.mece-graph-toolbar-btn {
+  width: 28px !important;
+  height: 28px !important;
+  min-width: 28px !important;
+  min-height: 28px !important;
+  padding: 0 !important;
+  margin: 0 !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  background: transparent !important;
+  border: none !important;
+  border-radius: 5px !important;
+  box-shadow: none !important;
+  color: rgba(255, 255, 255, 0.7) !important;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.mece-graph-toolbar-btn:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+  color: rgba(255, 255, 255, 0.95) !important;
+  box-shadow: none !important;
+}
+
+.mece-graph-toolbar-btn:active {
+  background: rgba(255, 255, 255, 0.15) !important;
+  box-shadow: none !important;
+}
+
+.mece-graph-toolbar-btn .svg-icon {
+  width: 16px;
+  height: 16px;
+}
+
+.mece-graph-toolbar-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 2px;
+}
+
+/* ---- 通用按钮 ---- */
+.mece-btn {
+  padding: 5px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.mece-btn:hover {
+  background: var(--background-modifier-hover);
+}
+
+.mece-btn-primary {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+  border-color: var(--interactive-accent);
+  font-weight: 500;
+}
+
+.mece-btn-primary:hover {
+  background: var(--interactive-accent-hover);
+}
+
+.mece-btn-sm {
+  padding: 2px 8px;
+  border-radius: 3px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-muted);
+  font-size: 11px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.mece-btn-sm:hover {
+  background: var(--background-modifier-hover);
+  color: var(--text-normal);
 }
 
 /* ---- 空状态 ---- */
@@ -39,30 +350,1040 @@
   padding: 2rem;
 }
 
+.mece-empty-icon {
+  font-size: 48px;
+  margin-bottom: 12px;
+}
+
 .mece-empty-state h3 {
-  margin-bottom: 0.5rem;
+  margin: 0 0 0.5rem 0;
   color: var(--text-normal);
 }
 
-.mece-empty-state button {
-  margin-top: 1rem;
+.mece-empty-state p {
+  margin: 0 0 1rem 0;
+  font-size: 13px;
+  max-width: 420px;
+  line-height: 1.6;
 }
 
-/* ---- 占位状态 ---- */
-.mece-mindmap-placeholder {
+.mece-empty-steps {
   display: flex;
   flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  height: 100%;
-  text-align: center;
-  padding: 2rem;
+  gap: 4px;
+  margin-top: 8px;
+  text-align: left;
+  width: 100%;
+  max-width: 420px;
 }
 
-.mece-placeholder-note {
+/* ---- 步骤项 ---- */
+.mece-step {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 12px 14px;
+  border-radius: 8px;
+  border: 1px solid var(--background-modifier-border);
+  transition: all 0.15s ease;
+}
+
+.mece-step-current {
+  border-color: var(--interactive-accent);
+  background: var(--background-primary-alt, var(--background-secondary));
+}
+
+.mece-step-done {
+  opacity: 0.6;
+}
+
+.mece-step-pending {
+  opacity: 0.4;
+}
+
+/* 步骤指示器 */
+.mece-step-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  font-size: 12px;
+  font-weight: 600;
+  margin-top: 1px;
+}
+
+.mece-step-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--background-modifier-border);
   color: var(--text-muted);
-  font-size: 0.85em;
-  margin-top: 0.5rem;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.mece-step-current .mece-step-num {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
+}
+
+.mece-step-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--text-success, #4caf50);
+  color: white;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+/* 步骤内容 */
+.mece-step-content {
+  flex: 1;
+  min-width: 0;
+}
+
+.mece-step-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-normal);
+  line-height: 1.4;
+}
+
+.mece-step-current .mece-step-title {
+  color: var(--interactive-accent);
+}
+
+.mece-step-detail {
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  margin-top: 2px;
+}
+
+.mece-step-action {
+  margin-top: 8px;
+  padding: 5px 16px;
+  font-size: 12px;
+  border: none;
+}
+
+/* ============================================================
+   视图 Tab（整理 / 脑图）
+   ============================================================ */
+.mece-view-tabs {
+  display: flex;
+  gap: 0;
+  padding: 0 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  flex-shrink: 0;
+}
+
+.mece-view-tab {
+  padding: 8px 14px !important;
+  border: none !important;
+  background: transparent !important;
+  box-shadow: none !important;
+  color: var(--text-muted);
+  font-size: 13px;
+  cursor: pointer;
+  border-bottom: 2px solid transparent !important;
+  transition: all 0.15s ease;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border-radius: 0 !important;
+  margin-bottom: -1px;
+}
+
+.mece-view-tab:hover {
+  color: var(--text-normal);
+  background: transparent !important;
+}
+
+.mece-view-tab-active {
+  color: var(--interactive-accent) !important;
+  border-bottom-color: var(--interactive-accent) !important;
+  font-weight: 500;
+}
+
+.mece-view-tab-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  background: var(--background-modifier-border);
+  padding: 0 6px;
+  border-radius: 8px;
+  line-height: 1.6;
+}
+
+/* ============================================================
+   UnifiedOrganizer — 常驻整理器
+   ============================================================ */
+
+.mece-organizer-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: hidden;
+}
+
+.mece-organizer-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  flex-shrink: 0;
+}
+
+.mece-organizer-search {
+  flex: 1;
+  padding: 4px 10px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 12px;
+  outline: none;
+  min-width: 0;
+}
+
+.mece-organizer-search:focus {
+  border-color: var(--interactive-accent);
+}
+
+.mece-organizer-stats {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.mece-organizer-body {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* 分类树 */
+.mece-organizer-tree {
+  display: flex;
+  flex-direction: column;
+}
+
+/* Root 节点 */
+.mece-organizer-root {
+  display: flex;
+  flex-direction: column;
+}
+
+/* 聚合提示条 */
+.mece-aggregated-hint {
+  padding: 8px 12px;
+  background: var(--background-secondary);
+  color: var(--text-muted);
+  font-size: 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  flex-shrink: 0;
+}
+
+.mece-organizer-root-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  background: var(--background-secondary);
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-normal);
+  margin-bottom: 6px;
+}
+
+.mece-organizer-root-header:hover .mece-organizer-root-ops {
+  opacity: 1;
+}
+
+.mece-organizer-root-icon {
+  display: inline-flex;
+  align-items: center;
+  color: var(--interactive-accent);
+  flex-shrink: 0;
+}
+
+.mece-organizer-root-name {
+  flex: 1;
+  cursor: text;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.mece-organizer-root-ops {
+  opacity: 0;
+}
+
+/*
+ * 分类树层级连接线
+ * 关键测量：
+ *   .mece-organizer-category padding-left = 8
+ *   .mece-organizer-arrow width = 16
+ *   → 箭头中心距离 .category 左边 = 8 + 16/2 = 16px
+ *
+ * 嵌套节点 padding-left: 20（= 箭头中心 16 + 4 间距）
+ * 竖线绘制在 left: 16 处，正好对准父级箭头中心
+ */
+
+.mece-organizer-root-children {
+  /* 首层分类直接靠齐 root 左侧，不画连接线 */
+}
+
+.mece-organizer-node {
+  position: relative;
+}
+
+/* 嵌套节点：左侧留出缩进，并绘制连接线 */
+.mece-organizer-node-nested {
+  padding-left: 20px;
+}
+
+/* 竖线：从节点顶部延伸到底部，对准父级箭头中心 */
+.mece-organizer-node-nested::before {
+  content: '';
+  position: absolute;
+  left: 16px;
+  top: 0;
+  bottom: 0;
+  width: 1px;
+  background: var(--background-modifier-border);
+  pointer-events: none;
+}
+
+/* 横线：从竖线水平延伸，对齐 category 行中心（箭头中心） */
+.mece-organizer-node-nested::after {
+  content: '';
+  position: absolute;
+  left: 16px;
+  top: 19px;   /* category min-height 28 ≈ padding 5 + arrow 16/2 + 边距补偿 → 行中线约在 19px */
+  width: 8px;
+  height: 1px;
+  background: var(--background-modifier-border);
+  pointer-events: none;
+}
+
+/* 最后一个兄弟：竖线只画到横线位置 */
+.mece-organizer-node-nested:last-child::before {
+  bottom: auto;
+  height: 19px;
+}
+
+.mece-organizer-empty {
+  padding: 30px;
+  text-align: center;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.mece-organizer-add-root {
+  padding: 8px 0 4px;
+  margin-top: 4px;
+}
+
+.mece-organizer-add-root button {
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px dashed var(--background-modifier-border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.mece-organizer-add-root button:hover {
+  border-color: var(--interactive-accent);
+  color: var(--interactive-accent);
+  background: var(--background-modifier-hover);
+}
+
+/* 分类行 */
+.mece-organizer-category {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-radius: 4px;
+  transition: background 0.12s ease;
+  user-select: none;
+  min-height: 28px;
+}
+
+.mece-organizer-category:hover {
+  background: var(--background-modifier-hover);
+}
+
+.mece-organizer-dropzone-active {
+  background: rgba(var(--color-accent-rgb, 100, 100, 255), 0.15) !important;
+  outline: 2px dashed var(--interactive-accent);
+  outline-offset: -2px;
+}
+
+.mece-organizer-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  color: var(--text-faint);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 10px;
+  transition: transform 0.15s ease;
+}
+
+.mece-organizer-arrow:hover {
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+}
+
+.mece-organizer-category-name {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+}
+
+.mece-organizer-rename-input {
+  flex: 1;
+  border: 1px solid var(--interactive-accent);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 13px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  outline: none;
+}
+
+.mece-organizer-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--background-modifier-border);
+  padding: 0 6px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  line-height: 1.6;
+  min-width: 18px;
+  text-align: center;
+}
+
+.mece-organizer-ops {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  flex-shrink: 0;
+}
+
+.mece-organizer-category:hover .mece-organizer-ops {
+  opacity: 1;
+}
+
+.mece-organizer-op {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 12px;
+  transition: all 0.12s ease;
+  padding: 0;
+}
+
+.mece-organizer-op:hover {
+  background: var(--background-modifier-border);
+  color: var(--text-normal);
+}
+
+.mece-organizer-op svg {
+  width: 12px;
+  height: 12px;
+}
+
+.mece-organizer-op-add {
+  color: var(--text-success, #4caf50);
+}
+
+.mece-organizer-op-add:hover {
+  color: var(--text-success, #4caf50);
+}
+
+.mece-organizer-op-del {
+  color: var(--text-error, #e55);
+}
+
+.mece-organizer-op-del:hover {
+  color: var(--text-error, #e55);
+  background: rgba(255, 80, 80, 0.15);
+}
+
+.mece-organizer-arrow svg {
+  width: 12px;
+  height: 12px;
+}
+
+/* 子项容器：不再绘制连接线，连接线由 .mece-organizer-node 自身负责 */
+.mece-organizer-children {
+  /* 无缩进、无边框 */
+}
+
+/* 文件列表 */
+.mece-organizer-file-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  padding: 4px 0 6px 6px;
+}
+
+.mece-organizer-file {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 10px;
+  border-radius: 12px;
+  background: var(--background-secondary);
+  border: 1px solid var(--background-modifier-border);
+  color: var(--text-normal);
+  font-size: 12px;
+  cursor: grab;
+  transition: all 0.12s ease;
+  user-select: none;
+  max-width: 240px;
+}
+
+.mece-organizer-file:hover {
+  background: var(--background-modifier-hover);
+  border-color: var(--interactive-accent);
+  color: var(--interactive-accent);
+}
+
+.mece-organizer-file:active {
+  cursor: grabbing;
+}
+
+.mece-organizer-file-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* 未分类区 */
+.mece-organizer-unassigned {
+  border: 1px dashed var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 10px 12px;
+  background: var(--background-secondary);
+  transition: all 0.12s ease;
+  margin-top: 4px;
+}
+
+.mece-organizer-unassigned-title {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-muted);
+  margin-bottom: 8px;
+}
+
+.mece-organizer-unassigned-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.mece-organizer-unassigned-empty {
+  font-size: 12px;
+  color: var(--text-faint);
+  padding: 8px 0;
+}
+
+/* ============================================================
+   Schema 编辑器 Modal（保留给命令"编辑分类体系"使用）
+   ============================================================ */
+.mece-schema-editor-modal {
+  width: 90vw;
+  max-width: 700px;
+}
+
+.mece-schema-editor-modal .modal-content {
+  padding: 0;
+}
+
+.mece-schema-editor-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  margin-bottom: 12px;
+}
+
+.mece-schema-editor-header h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
+.mece-schema-editor-config {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+}
+
+.mece-schema-editor-config select {
+  padding: 2px 6px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+}
+
+.mece-schema-editor-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 12px;
+  border-top: 1px solid var(--background-modifier-border);
+  margin-top: 12px;
+}
+
+/* ---- Schema 树形编辑器 ---- */
+.mece-schema-tree {
+  padding: 8px 0;
+}
+
+.mece-schema-tree-stats {
+  display: flex;
+  gap: 12px;
+  padding: 6px 12px;
+  font-size: 12px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--background-modifier-border);
+  margin-bottom: 8px;
+}
+
+.mece-schema-tree-body {
+  max-height: 450px;
+  overflow-y: auto;
+  padding: 0 4px;
+}
+
+.mece-schema-tree-empty {
+  text-align: center;
+  padding: 30px;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.mece-schema-tree-row {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 8px;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  user-select: none;
+}
+
+.mece-schema-tree-row:hover {
+  background: var(--background-modifier-hover);
+}
+
+.mece-schema-tree-row:hover .mece-schema-tree-ops {
+  opacity: 1;
+}
+
+.mece-schema-tree-arrow {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  flex-shrink: 0;
+  color: var(--text-faint);
+  border-radius: 3px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.mece-schema-tree-arrow:hover {
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+}
+
+.mece-schema-tree-icon {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  font-size: 14px;
+}
+
+.mece-schema-tree-name {
+  flex: 1;
+  font-size: 13px;
+  color: var(--text-normal);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  cursor: text;
+}
+
+.mece-schema-tree-rename-input {
+  flex: 1;
+  border: 1px solid var(--interactive-accent);
+  border-radius: 3px;
+  padding: 1px 4px;
+  font-size: 13px;
+  background: var(--background-primary);
+  color: var(--text-normal);
+  outline: none;
+}
+
+.mece-schema-tree-desc {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-left: 4px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 120px;
+}
+
+.mece-schema-tree-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  background: var(--background-modifier-border);
+  padding: 0px 5px;
+  border-radius: 8px;
+  flex-shrink: 0;
+  line-height: 1.6;
+}
+
+.mece-schema-tree-ops {
+  display: flex;
+  gap: 2px;
+  opacity: 0;
+  transition: opacity 0.12s ease;
+  flex-shrink: 0;
+}
+
+.mece-schema-tree-op {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 22px;
+  height: 22px;
+  border-radius: 3px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  color: var(--text-muted);
+  font-size: 12px;
+  transition: all 0.12s ease;
+  padding: 0;
+}
+
+.mece-schema-tree-op:hover {
+  background: var(--background-modifier-border);
+  color: var(--text-normal);
+}
+
+.mece-schema-tree-add-root {
+  padding: 8px 12px;
+  border-top: 1px solid var(--background-modifier-border);
+  margin-top: 8px;
+}
+
+.mece-schema-tree-add-root button {
+  padding: 4px 12px;
+  border-radius: 4px;
+  border: 1px dashed var(--background-modifier-border);
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+
+.mece-schema-tree-add-root button:hover {
+  border-color: var(--interactive-accent);
+  color: var(--interactive-accent);
+  background: var(--background-modifier-hover);
+}
+
+/* ---- Patch Review Modal ---- */
+.mece-patch-review {
+  max-width: min(600px, 85vw);
+  width: 100%;
+}
+
+.mece-patch-review-modal {
+  max-width: 650px;
+}
+
+.mece-pr-header {
+  margin-bottom: 10px;
+}
+
+.mece-pr-header h3 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+}
+
+.mece-pr-desc {
+  margin: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.mece-pr-stats-bar {
+  display: flex;
+  gap: 12px;
+  padding: 8px 12px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+  margin-bottom: 10px;
+  flex-wrap: wrap;
+}
+
+.mece-pr-stat {
+  font-size: 12px;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+.mece-pr-stat-highlight {
+  color: var(--text-success, #4caf50);
+  font-weight: 500;
+}
+
+.mece-pr-stat-muted {
+  color: var(--text-faint);
+}
+
+.mece-pr-action-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 8px;
+}
+
+.mece-pr-summary {
+  flex: 1;
+  text-align: right;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.mece-pr-list {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  margin-bottom: 10px;
+}
+
+.mece-pr-empty {
+  text-align: center;
+  padding: 30px;
+  color: var(--text-faint);
+  font-size: 13px;
+}
+
+.mece-pr-item {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  padding: 10px 12px;
+  border-bottom: 1px solid var(--background-modifier-border);
+  transition: background 0.12s ease;
+  overflow: hidden;
+}
+
+.mece-pr-item:last-child {
+  border-bottom: none;
+}
+
+.mece-pr-item:hover {
+  background: var(--background-modifier-hover);
+}
+
+.mece-pr-item-rejected {
+  opacity: 0.45;
+}
+
+.mece-pr-checkbox {
+  flex-shrink: 0;
+  margin-top: 2px;
+  width: 15px;
+  height: 15px;
+  accent-color: var(--interactive-accent);
+  cursor: pointer;
+}
+
+.mece-pr-file-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.mece-pr-filename {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text-normal);
+  margin-bottom: 4px;
+}
+
+.mece-pr-diff {
+  font-family: var(--font-monospace, 'SF Mono', 'Fira Code', monospace);
+  font-size: 12px;
+  line-height: 1.6;
+  overflow: hidden;
+  max-width: 100%;
+}
+
+.mece-pr-diff-existing {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  flex-wrap: wrap;
+  color: var(--text-muted);
+}
+
+.mece-pr-diff-added {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.mece-pr-diff-removed {
+  display: flex;
+  align-items: flex-start;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.mece-pr-diff-prefix {
+  flex-shrink: 0;
+  font-weight: 600;
+  width: 14px;
+  color: var(--text-faint);
+}
+
+.mece-pr-diff-plus {
+  color: var(--text-success, #4caf50);
+}
+
+.mece-pr-diff-minus {
+  color: var(--text-error, #e55);
+}
+
+.mece-pr-tag {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 3px;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
+.mece-pr-tag-existing {
+  background: var(--background-modifier-border);
+  color: var(--text-muted);
+}
+
+.mece-pr-tag-added {
+  background: rgba(76, 175, 80, 0.15);
+  color: var(--text-success, #4caf50);
+  font-weight: 500;
+}
+
+.mece-pr-tag-removed {
+  background: rgba(255, 80, 80, 0.12);
+  color: var(--text-error, #e55);
+  text-decoration: line-through;
+}
+
+.mece-pr-result-hint {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-top: 2px;
+}
+
+/* Patch Review - 新分类建议 */
+.mece-pr-new-categories {
+  margin-bottom: 10px;
+  padding: 8px 12px;
+  background: var(--background-secondary);
+  border-radius: 6px;
+}
+
+.mece-pr-new-categories h4 {
+  margin: 0 0 6px 0;
+  font-size: 13px;
+}
+
+.mece-pr-category-item {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 0;
+  font-size: 12px;
+  cursor: pointer;
+}
+
+.mece-pr-category-path {
+  color: var(--text-normal);
+  font-weight: 500;
+}
+
+.mece-pr-category-source {
+  color: var(--text-faint);
+  font-size: 11px;
+}
+
+.mece-pr-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 8px;
+  border-top: 1px solid var(--background-modifier-border);
 }
 
 /* ---- 进度弹窗 ---- */
@@ -112,110 +1433,27 @@
   justify-content: flex-end;
 }
 
-/* ---- 详情面板 ---- */
-.mece-detail-panel {
-  padding: 1rem;
-  border-left: 1px solid var(--background-modifier-border);
-  width: 320px;
-  max-height: 100%;
-  overflow-y: auto;
-  background: var(--background-primary);
-}
-
-.mece-detail-panel h4 {
-  margin-top: 0;
-  margin-bottom: 0.25rem;
-}
-
-.mece-detail-count {
-  color: var(--text-muted);
-  font-size: 0.85em;
-  margin-bottom: 1rem;
-}
-
-.mece-detail-list {
-  display: flex;
-  flex-direction: column;
-  gap: 0.75rem;
-}
-
-.mece-detail-item {
-  padding: 0.5rem;
-  border-radius: 4px;
-  background: var(--background-secondary);
-}
-
-.mece-detail-content {
-  margin: 0 0 0.5rem 0;
-  font-size: 0.9em;
+/* ---- 确认对话框 ---- */
+.mece-confirm-text {
+  margin: 4px 0;
   line-height: 1.5;
+  color: var(--text-normal);
 }
 
-.mece-detail-more {
-  text-align: center;
-  color: var(--text-muted);
-  font-size: 0.85em;
-  padding: 0.5rem;
+.mece-confirm-buttons {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 16px;
 }
 
-.mece-detail-close {
-  margin-top: 0.75rem;
-  width: 100%;
-}
-
-.mece-detail-quote {
-  background: var(--background-secondary);
-  border-left: 3px solid var(--interactive-accent);
-  padding: 0.5rem 0.75rem;
-  margin: 0.5rem 0;
-  font-size: 0.9em;
-  color: var(--text-muted);
-  border-radius: 0 4px 4px 0;
-}
-
-.mece-detail-source {
-  font-size: 0.85em;
-  color: var(--text-accent);
+.mece-confirm-buttons button {
+  padding: 6px 16px;
+  border-radius: 4px;
   cursor: pointer;
-  text-decoration: underline;
 }
 
-.mece-detail-source:hover {
-  color: var(--text-accent-hover);
-}
-
-/* ---- D3 思维导图节点 ---- */
-.mece-node circle {
-  cursor: pointer;
-  transition: all 0.2s ease;
-}
-
-.mece-node circle:hover {
-  filter: brightness(1.2);
-}
-
-.mece-node text {
-  font-size: 12px;
-  fill: var(--text-normal);
-  pointer-events: none;
-}
-
-.mece-link {
-  fill: none;
-  stroke: var(--background-modifier-border);
-  stroke-width: 1.5px;
-}
-
-/* ---- 节点层级颜色 ---- */
-.mece-node-theme circle { fill: #6366f1; }
-.mece-node-category circle { fill: #06b6d4; }
-.mece-node-viewpoint circle { fill: #f59e0b; }
-
-/* ---- 知识点数量 badge ---- */
-.mece-badge {
-  font-size: 10px;
-  fill: white;
-  text-anchor: middle;
-  dominant-baseline: central;
-  pointer-events: none;
+.mece-confirm-buttons button.mod-warning {
+  background: var(--interactive-accent);
+  color: var(--text-on-accent);
 }

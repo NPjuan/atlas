@@ -1,66 +1,66 @@
 // ============================================================
-// 全局类型定义 — MECE Knowledge Mind Map
+// MECE V3 — 全局类型定义（全新，不兼容旧版本）
 // ============================================================
+
+// ---- Taxonomy Schema（分类体系） ----
+
+/** 分类体系中的一个节点 */
+export interface TaxonomyNode {
+  /** 唯一标识 */
+  id: string;
+  /** 显示名称，如 "认识论" */
+  name: string;
+  /** 完整路径，如 "哲学/认识论" */
+  fullPath: string;
+  /** 可选描述，帮助 AI 更准确选择此分类 */
+  description?: string;
+  /** 子分类 */
+  children: TaxonomyNode[];
+}
+
+/** 完整的分类体系 */
+export interface TaxonomySchema {
+  /** Schema 版本号 */
+  version: number;
+  /** 创建时间 */
+  createdAt: string;
+  /** 最后更新时间 */
+  updatedAt: string;
+  /** 最大层级深度（默认 3） */
+  maxDepth: number;
+  /** 根节点显示名（可被用户重命名） */
+  rootName: string;
+  /** 分类树根节点列表（root 的一级子节点） */
+  nodes: TaxonomyNode[];
+}
 
 // ---- 数据存储 ----
 
-/** schema 版本号，用于数据迁移 */
-export const STORE_VERSION = 2;
+/** Store 版本号 */
+export const STORE_VERSION = 1;
 
-/** 知识库总数据结构 */
-export interface KnowledgeStore {
+/** 整个 Vault 作为文件夹 key 时的特殊值 */
+export const VAULT_SCOPE_KEY = '__vault__';
+
+/** 插件数据（存储在 data.json） */
+export interface MECEStore {
   version: number;
-  lastUpdated: string;
-  documents: Record<string, DocumentRecord>;
-  knowledgePoints: KnowledgePoint[];
-  categoryTree: CategoryNode;
-  /** 操作日志（append-only） */
-  logs: LogEntry[];
-  /** 节点摘要缓存（key 为 CategoryNode.id） */
-  summaries: Record<string, NodeSummary>;
+  /** 分类体系（按文件夹路径分隔），key='__vault__' 表示整个 Vault */
+  taxonomies: Record<string, TaxonomySchema>;
+  /** 已处理文件记录（增量检测用） */
+  processedFiles: Record<string, ProcessedFileRecord>;
+  /** 插件设置 */
+  settings: MECESettings;
 }
 
-/** 已处理的文档记录 */
-export interface DocumentRecord {
+/** 已处理的文件记录 */
+export interface ProcessedFileRecord {
+  /** 内容 hash */
   hash: string;
-  processedAt: string;
-  status: 'completed' | 'partial';
-  processedChunks?: number;
-}
-
-/** 知识点置信度 */
-export type ConfidenceLevel = 'high' | 'medium' | 'low';
-
-/** 单个知识点 */
-export interface KnowledgePoint {
-  id: string;
-  content: string;
-  sourceFile: string;
-  sourceQuote: string;
-  sourcePosition: { start: number; end: number };
-  categoryIds: string[];
-  classified: boolean;
-  /** AI 提取时的置信度评估 */
-  confidence: ConfidenceLevel;
-  /** 提取时间戳（ISO 8601） */
-  extractedAt: string;
-  /** 交叉引用关联的知识点 ID 列表 */
-  relatedIds: string[];
-  /** 是否标记为常青（永不过期） */
-  evergreen: boolean;
-  /** 是否已过期 */
-  stale: boolean;
-  /** 来源文件的标签 */
-  tags: string[];
-}
-
-/** 分类树节点（递归结构） */
-export interface CategoryNode {
-  id: string;
-  name: string;
-  level: 'root' | 'theme' | 'category' | 'viewpoint';
-  children: CategoryNode[];
-  knowledgePointIds: string[];
+  /** AI 打标签时间 */
+  taggedAt: string;
+  /** 打上的 tag 数量 */
+  tagCount: number;
 }
 
 // ---- AI 相关 ----
@@ -68,30 +68,41 @@ export interface CategoryNode {
 /** AI 提供商类型 */
 export type AIProviderType = 'claude' | 'openai' | 'ollama' | 'deepseek';
 
+/** Schema 生成时读取笔记内容的模式 */
+export type SchemaContextMode = 'title-only' | 'first-500' | 'full';
+
+/** 分类规则 */
+export type ClassificationMode = 'mece' | 'discipline' | 'custom';
+
 /** 插件设置 */
 export interface MECESettings {
+  // -- AI 配置 --
   aiProvider: AIProviderType;
   apiKey: string;
   model: string;
   ollamaHost: string;
-  /** 扫描排除的目录列表 */
+  /** 自定义 OpenAI 兼容 API base URL */
+  openaiBaseUrl: string;
+
+  // -- Schema 配置 --
+  /** Schema 生成时的内容读取模式 */
+  schemaContextMode: SchemaContextMode;
+  /** 分类规则 */
+  classificationMode: ClassificationMode;
+  /** 自定义分类 Prompt（classificationMode 为 custom 时使用） */
+  customClassificationPrompt: string;
+
+  // -- 标签配置 --
+  /** 每篇笔记最多 tag 数 */
+  maxTagsPerFile: number;
+  /** Tag 前缀（如 'mece/'），为空则不加 */
+  tagPrefix: string;
+
+  // -- 扫描配置 --
+  /** 排除的目录列表 */
   excludeDirs: string[];
-  /** 单文件最大字数警告阈值 */
-  maxFileCharsWarn: number;
   /** 单文件最大字数跳过阈值 */
   maxFileCharsSkip: number;
-  /** AI 请求最大并发数 */
-  maxConcurrency: number;
-  /** 自定义 OpenAI 兼容 API base URL（留空则用官方地址） */
-  openaiBaseUrl: string;
-  /** 知识点过期天数（超过此天数未更新则标记为 stale），默认 90 */
-  staleDays: number;
-  /** 是否启用 frontmatter 回写（将分类结果写入文件 frontmatter），默认 false */
-  enableWriteBack: boolean;
-  /** 扫描完成后是否自动执行 Lint 健康检查，默认 true */
-  lintOnScan: boolean;
-  /** 操作日志最大条目数，默认 500 */
-  maxLogEntries: number;
 }
 
 /** 默认设置 */
@@ -100,118 +111,136 @@ export const DEFAULT_SETTINGS: MECESettings = {
   apiKey: '',
   model: '',
   ollamaHost: 'http://localhost:11434',
-  excludeDirs: ['templates', 'daily', '.obsidian'],
-  maxFileCharsWarn: 20000,
-  maxFileCharsSkip: 50000,
-  maxConcurrency: 3,
   openaiBaseUrl: '',
-  staleDays: 90,
-  enableWriteBack: false,
-  lintOnScan: true,
-  maxLogEntries: 500,
+  schemaContextMode: 'full',
+  classificationMode: 'mece',
+  customClassificationPrompt: '',
+  maxTagsPerFile: 3,
+  tagPrefix: '',
+  excludeDirs: ['templates', 'daily', '.obsidian'],
+  maxFileCharsSkip: 50000,
 };
 
-/** 空知识库 */
-export function createEmptyStore(): KnowledgeStore {
+/** 创建空 Store */
+export function createEmptyStore(): MECEStore {
   return {
     version: STORE_VERSION,
-    lastUpdated: new Date().toISOString(),
-    documents: {},
-    knowledgePoints: [],
-    categoryTree: {
-      id: 'root',
-      name: '知识库',
-      level: 'root',
-      children: [],
-      knowledgePointIds: [],
-    },
-    logs: [],
-    summaries: {},
+    taxonomies: {},
+    processedFiles: {},
+    settings: { ...DEFAULT_SETTINGS },
   };
 }
 
-// ---- 操作日志 ----
+// ---- 标签索引（运行时，不持久化） ----
 
-/** 操作日志类型 */
-export type LogType = 'scan' | 'classify' | 'lint' | 'query' | 'summary' | 'writeback';
+/** 标签树节点 */
+export interface TagTreeNode {
+  name: string;
+  fullTag: string;
+  files: Set<string>;
+  fileCount: number;
+  children: Map<string, TagTreeNode>;
+}
 
-/** 操作日志条目 */
-export interface LogEntry {
-  id: string;
-  timestamp: string;
-  type: LogType;
-  message: string;
-  details?: {
-    filesProcessed?: number;
-    pointsExtracted?: number;
-    pointsClassified?: number;
-    contradictions?: number;
-    staleItems?: number;
-    gaps?: number;
-    orphans?: number;
-    queryQuestion?: string;
-    summaryNodeId?: string;
+/** 标签索引 */
+export interface TagIndex {
+  tagToFiles: Map<string, Set<string>>;
+  fileToTags: Map<string, string[]>;
+  tree: TagTreeNode;
+  stats: {
+    totalFiles: number;
+    totalTags: number;
+    untaggedFiles: number;
   };
 }
 
-// ---- 节点摘要 ----
+// ---- Patch 预览 ----
 
-/** 节点摘要缓存 */
-export interface NodeSummary {
-  nodeId: string;
-  summary: string;
-  generatedAt: string;
-  /** 生成时的知识点数量，用于判断是否需要更新 */
-  kpCount: number;
-  /** 新增知识点后自动标记为 stale，需要重新生成 */
-  stale: boolean;
+/** 单个文件的标签变更 */
+export interface TagPatch {
+  filePath: string;
+  fileName: string;
+  /** 原有 tags */
+  oldTags: string[];
+  /** AI 建议的完整最终 tags */
+  newTags: string[];
+  /** 新增的 tag */
+  added: string[];
+  /** 删除的 tag */
+  removed: string[];
+  /** 用户是否接受（默认 true） */
+  accepted: boolean;
+  /** 文件内容 hash */
+  hash: string;
+  /** 是否有变更 */
+  hasChanges: boolean;
 }
 
-// ---- Lint 健康检查 ----
-
-/** 矛盾项 */
-export interface ContradictionItem {
-  kpId1: string;
-  kpId2: string;
-  reason: string;
+/** AI 建议的新分类（Schema 中没有的） */
+export interface SuggestedCategory {
+  /** AI 建议的分类路径，如 "语言哲学/维特根斯坦" */
+  path: string;
+  /** 建议的来源文件 */
+  sourceFile: string;
+  /** 用户是否确认纳入 Schema */
+  accepted: boolean;
 }
 
-/** 过期项 */
-export interface StaleItem {
-  kpId: string;
-  extractedAt: string;
-  daysSince: number;
+/** 一次 AI 打标签的完整 Patch */
+export interface TagPatchList {
+  createdAt: string;
+  patches: TagPatch[];
+  /** AI 建议的新分类列表 */
+  suggestedCategories: SuggestedCategory[];
+  stats: {
+    totalFiles: number;
+    filesWithChanges: number;
+    totalNewTags: number;
+    skippedFiles: number;
+  };
 }
 
-/** 孤立项 */
-export interface OrphanItem {
-  kpId: string;
-  content: string;
-}
-
-/** 知识缺口项 */
-export interface GapItem {
-  categoryId: string;
-  categoryName: string;
-  suggestion: string;
-}
-
-/** Lint 健康检查报告 */
-export interface LintReport {
-  timestamp: string;
-  contradictions: ContradictionItem[];
-  staleItems: StaleItem[];
-  orphans: OrphanItem[];
-  gaps: GapItem[];
-  totalIssues: number;
-}
-
-// ---- 事件 / 进度 ----
+// ---- 进度 ----
 
 export interface ScanProgress {
-  phase: 'scanning' | 'extracting' | 'classifying' | 'linting' | 'querying' | 'summarizing';
+  phase: 'scanning' | 'schema-gen' | 'tagging' | 'writing';
   current: number;
   total: number;
   currentFile?: string;
   message?: string;
+}
+
+// ---- Schema 生成相关 ----
+
+/** 笔记概览（用于 Schema 生成） */
+export interface NoteOverview {
+  fileName: string;
+  existingTags: string[];
+  content: string;
+}
+
+/** AI Schema 生成结果 */
+export interface TaxonomyResult {
+  /** AI 生成的分类树（不含 id/fullPath，需后处理补充） */
+  taxonomy: Array<{
+    name: string;
+    description?: string;
+    children: Array<{
+      name: string;
+      description?: string;
+      children: Array<{
+        name: string;
+        description?: string;
+        children: never[];
+      }>;
+    }>;
+  }>;
+}
+
+/** 约束式打标签的 AI 返回 */
+export interface ConstrainedTaggingResult {
+  /** 从 Schema 中选择的标签路径 */
+  tags: string[];
+  /** AI 建议的新分类（Schema 中没有的） */
+  newCategories: string[];
 }

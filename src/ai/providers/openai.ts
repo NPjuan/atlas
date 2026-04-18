@@ -1,16 +1,19 @@
 import {
   AIProvider,
-  ExtractionResult,
-  ClassificationResult,
-  CategoryTreeSkeleton,
+  TaggingResult,
+  ConstrainedTaggingResult,
+  RawTaxonomyResult,
   parseJSON,
 } from '../types';
-import { buildExtractionPrompt, buildClassificationPrompt } from '../prompts';
-import { KnowledgePoint } from '../../types';
+import {
+  buildOpenTaggingPrompt,
+  buildConstrainedTaggingPrompt,
+  buildSchemaGenerationPrompt,
+} from '../prompts';
+import type { ClassificationMode, TaxonomySchema, NoteOverview } from '../../types';
 
 /**
- * OpenAI Provider — 使用 Chat Completions API + JSON mode
- * 也是 Ollama Provider 的基类
+ * OpenAI Provider — 也是 Ollama/DeepSeek 的基类
  */
 export class OpenAIProvider implements AIProvider {
   readonly name = 'OpenAI';
@@ -33,33 +36,71 @@ export class OpenAIProvider implements AIProvider {
     }
   }
 
-  async extract(chunk: string, sourceFile: string): Promise<ExtractionResult> {
-    const prompt = buildExtractionPrompt(chunk, sourceFile);
-    const content = await this.chat(prompt);
-    const result = parseJSON<ExtractionResult>(content);
+  // ---- 开放式打标签（无 Schema） ----
 
-    // 校验必要字段
-    if (!result.knowledgePoints || !Array.isArray(result.knowledgePoints)) {
-      return { knowledgePoints: [] };
+  async suggestTags(
+    content: string,
+    sourceFile: string,
+    existingTags: string[],
+    vaultTags: string[],
+    mode: ClassificationMode,
+    maxTags: number,
+    customPrompt?: string,
+  ): Promise<TaggingResult> {
+    const prompt = buildOpenTaggingPrompt(content, sourceFile, existingTags, vaultTags, mode, maxTags, customPrompt);
+    const raw = await this.chat(prompt);
+    const result = parseJSON<any>(raw);
+
+    const tags = result.tags || result.newTags || [];
+    if (!Array.isArray(tags)) return { tags: [] };
+
+    return {
+      tags: tags.filter((t: any) => typeof t === 'string' && t.trim().length > 0).map((t: string) => t.trim()),
+    };
+  }
+
+  // ---- 约束式打标签（有 Schema） ----
+
+  async suggestTagsConstrained(
+    content: string,
+    sourceFile: string,
+    existingTags: string[],
+    taxonomy: TaxonomySchema,
+    maxTags: number,
+  ): Promise<ConstrainedTaggingResult> {
+    const prompt = buildConstrainedTaggingPrompt(content, sourceFile, existingTags, taxonomy, maxTags);
+    const raw = await this.chat(prompt);
+    const result = parseJSON<any>(raw);
+
+    const tags = Array.isArray(result.tags) ? result.tags : [];
+    const newCategories = Array.isArray(result.newCategories) ? result.newCategories : [];
+
+    return {
+      tags: tags.filter((t: any) => typeof t === 'string' && t.trim()).map((t: string) => t.trim()),
+      newCategories: newCategories.filter((t: any) => typeof t === 'string' && t.trim()).map((t: string) => t.trim()),
+    };
+  }
+
+  // ---- 生成分类体系 Schema ----
+
+  async generateTaxonomy(
+    notes: NoteOverview[],
+    maxDepth: number,
+    classificationMode: ClassificationMode,
+    customPrompt?: string,
+  ): Promise<RawTaxonomyResult> {
+    const prompt = buildSchemaGenerationPrompt(notes, maxDepth, classificationMode, customPrompt);
+    const raw = await this.chat(prompt);
+    const result = parseJSON<any>(raw);
+
+    if (!result.taxonomy || !Array.isArray(result.taxonomy)) {
+      throw new Error('AI 返回的分类体系格式不正确：缺少 taxonomy 数组');
     }
-    return result;
+
+    return result as RawTaxonomyResult;
   }
 
-  async classify(
-    knowledgePoints: Pick<KnowledgePoint, 'id' | 'content'>[],
-    treeSkeleton: CategoryTreeSkeleton
-  ): Promise<ClassificationResult> {
-    const prompt = buildClassificationPrompt(knowledgePoints, treeSkeleton);
-    const content = await this.chat(prompt);
-    const result = parseJSON<ClassificationResult>(content);
-
-    // 校验必要字段
-    if (!result.assignments) result.assignments = {};
-    if (!result.newNodes) result.newNodes = [];
-    return result;
-  }
-
-  // ---- 内部方法 ----
+  // ---- 底层 Chat ----
 
   protected async chat(userMessage: string): Promise<string> {
     const body: any = {
@@ -67,7 +108,7 @@ export class OpenAIProvider implements AIProvider {
       messages: [
         {
           role: 'system',
-          content: '你是一个精确的知识处理助手。始终返回有效的 JSON，不要包裹在 markdown 代码块中。',
+          content: '你是一个精确的知识分类助手。始终返回有效的 JSON，不要包裹在 markdown 代码块中。',
         },
         { role: 'user', content: userMessage },
       ],

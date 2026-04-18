@@ -1,0 +1,607 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MECE Tag 脑图（V3 Schema-aligned）</title>
+<style>
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+/* Obsidian 暗色主题色板 */
+:root {
+  --bg-primary: #1e1e1e;
+  --bg-secondary: #262626;
+  --bg-tertiary: #2e2e2e;
+  --border: #363636;
+  --text-normal: #dcddde;
+  --text-muted: #999;
+  --text-faint: #666;
+  --accent: #7f6df2;        /* Obsidian 默认紫色 accent */
+  --accent-hover: #8b7ff5;
+  --graph-bg: #202020;
+}
+
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Inter', sans-serif;
+  background: var(--graph-bg);
+  color: var(--text-normal);
+  overflow: hidden;
+  height: 100vh;
+}
+
+.toolbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 6px 14px; background: var(--bg-secondary); border-bottom: 1px solid var(--border);
+  z-index: 10; position: relative;
+}
+.toolbar-left { display: flex; align-items: center; gap: 5px; }
+.toolbar-right { display: flex; align-items: center; gap: 10px; font-size: 11px; color: var(--text-muted); }
+
+.btn {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 4px 10px; border-radius: 4px; border: 1px solid var(--border);
+  background: var(--bg-tertiary); color: var(--text-normal); font-size: 12px;
+  cursor: pointer; transition: all 0.12s ease;
+}
+.btn:hover { background: #383838; border-color: #444; }
+
+.btn-primary {
+  background: var(--accent); color: #fff; border-color: var(--accent); font-weight: 500;
+}
+.btn-primary:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+#graph { width: 100%; height: calc(100vh - 74px); position: relative; }
+
+.statusbar {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 5px 14px; background: var(--bg-secondary); border-top: 1px solid var(--border);
+  font-size: 11px; color: var(--text-faint); position: fixed; bottom: 0; left: 0; right: 0; z-index: 10;
+}
+
+.ai-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 11px; color: var(--text-muted);
+}
+.ai-badge::before {
+  content: ''; display: inline-block; width: 6px; height: 6px;
+  border-radius: 50%; background: #50a14f;
+}
+
+#loading {
+  position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+  font-size: 13px; color: var(--text-muted); z-index: 5;
+}
+#loading .spinner {
+  display: inline-block; width: 14px; height: 14px; border: 2px solid var(--border);
+  border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite;
+  vertical-align: middle; margin-right: 8px;
+}
+@keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div class="toolbar">
+  <div class="toolbar-left">
+    <button class="btn btn-primary" onclick="alert('AI 打标签')">▶ AI 打标签</button>
+    <button class="btn" onclick="doExpandAll()">展开全部</button>
+    <button class="btn" onclick="doCollapseAll()">折叠全部</button>
+    <button class="btn" onclick="graph && graph.zoomToFit(400, 40)">🔄 适应</button>
+  </div>
+  <div class="toolbar-right">
+    <span id="stats"></span>
+    <span class="ai-badge">DeepSeek · deepseek-chat</span>
+  </div>
+</div>
+
+<div id="graph">
+  <div id="loading"><span class="spinner"></span>正在加载图谱引擎...</div>
+</div>
+
+<div class="statusbar">
+  <span>点击 tag 展开/折叠 · 点击笔记打开 · 滚轮缩放 · 拖拽平移</span>
+  <span id="statsBar"></span>
+</div>
+
+<script>
+// ============================================================
+// 动态加载 force-graph（带备用 CDN）
+// ============================================================
+let graph = null;
+
+function loadScript(url) {
+  return new Promise((resolve, reject) => {
+    const s = document.createElement('script');
+    s.src = url;
+    s.onload = resolve;
+    s.onerror = reject;
+    document.head.appendChild(s);
+  });
+}
+
+async function loadForceGraph() {
+  const cdns = [
+    'https://unpkg.com/force-graph@1',
+    'https://cdn.jsdelivr.net/npm/force-graph@1',
+    'https://cdnjs.cloudflare.com/ajax/libs/force-graph/1.43.5/force-graph.min.js',
+  ];
+  for (const url of cdns) {
+    try {
+      await loadScript(url);
+      if (typeof ForceGraph === 'function') {
+        console.log('force-graph loaded from:', url);
+        return true;
+      }
+    } catch (e) {
+      console.warn('CDN failed:', url, e);
+    }
+  }
+  return false;
+}
+
+// ============================================================
+// 模拟数据 — 对齐 V3 TaxonomySchema 结构
+// Schema 定义分类体系，tagToFiles 模拟 frontmatter tag → 文件映射
+// ============================================================
+
+// TaxonomySchema 格式（与 src/types.ts 一致）
+const mockSchema = {
+  version: 1,
+  maxDepth: 3,
+  nodes: [
+    { name: "认识论", description: "知识的本质与获取", children: [
+      { name: "经验主义", children: [] },
+      { name: "理性主义", children: [] },
+      { name: "先验哲学", children: [] },
+    ]},
+    { name: "伦理学", description: "道德行为的理论", children: [
+      { name: "功利主义", children: [] },
+      { name: "义务论", children: [] },
+      { name: "美德伦理", children: [] },
+    ]},
+    { name: "形而上学", description: "存在的本质", children: [
+      { name: "存在主义", children: [
+        { name: "萨特", children: [] },
+        { name: "加缪", children: [] },
+      ]},
+      { name: "柏拉图主义", children: [] },
+    ]},
+    { name: "逻辑学", children: [
+      { name: "形式逻辑", children: [] },
+      { name: "非形式逻辑", children: [] },
+    ]},
+    { name: "心灵哲学", children: [] },
+    { name: "东方哲学", children: [
+      { name: "禅宗", children: [] },
+      { name: "道家", children: [] },
+    ]},
+    { name: "政治哲学", children: [
+      { name: "正义论", children: [] },
+    ]},
+    { name: "美学", description: "艺术与审美", children: [] },
+    { name: "科学哲学", children: [] },
+  ]
+};
+
+// 模拟 tag → files 映射（正式版从 metadataCache 读取）
+const mockTagToFiles = {
+  "认识论": ["康德的先验哲学"],
+  "认识论/经验主义": ["休谟-人类理解研究", "洛克-人类理解论"],
+  "认识论/理性主义": ["笛卡尔-第一哲学沉思"],
+  "认识论/先验哲学": ["康德的先验哲学", "先验感性论"],
+  "伦理学/功利主义": ["功利主义伦理学", "边沁-道德与立法原理"],
+  "伦理学/义务论": ["康德-道德形而上学"],
+  "伦理学/美德伦理": ["亚里士多德-尼各马可伦理学"],
+  "形而上学/存在主义/萨特": ["萨特的存在主义"],
+  "形而上学/存在主义/加缪": ["加缪-荒谬与反抗"],
+  "形而上学/柏拉图主义": ["柏拉图的理型论"],
+  "逻辑学/形式逻辑": ["形式逻辑基础", "命题逻辑"],
+  "心灵哲学": ["心灵哲学-意识的难题"],
+  "东方哲学/禅宗": ["禅宗与顿悟"],
+  "东方哲学/道家": ["道家哲学-老子与庄子"],
+  "政治哲学/正义论": ["罗尔斯的正义论"],
+  "美学": ["美学-什么是艺术"],
+  "科学哲学": ["科学哲学-波普尔与库恩"],
+};
+
+// 将 TaxonomySchema + tagToFiles → force-graph rawTree
+function schemaToRawTree(schema, tagToFiles, rootName) {
+  let idCounter = 0;
+  const genId = (prefix) => prefix + '_' + (idCounter++);
+
+  function convert(nodes, parentPath) {
+    return nodes.map(n => {
+      const fullPath = parentPath ? `${parentPath}/${n.name}` : n.name;
+      const id = genId('t');
+      const files = tagToFiles[fullPath] || [];
+      const children = convert(n.children || [], fullPath);
+      return { id, name: n.name, type: 'tag', fullPath, children, files };
+    });
+  }
+
+  return {
+    id: 'root',
+    name: rootName || '知识库',
+    type: 'root',
+    children: convert(schema.nodes, ''),
+  };
+}
+
+const rawTree = schemaToRawTree(mockSchema, mockTagToFiles, '哲学笔记');
+
+// ============================================================
+// 数据管理
+// ============================================================
+
+// 初始展开 root + 第一层子节点
+const expanded = new Set(['root']);
+if (rawTree.children) rawTree.children.forEach(ch => expanded.add(ch.id));
+
+// 从 tree id 快查 tree 节点
+const treeIndex = {};
+(function indexTree(node) {
+  treeIndex[node.id] = node;
+  if (node.children) node.children.forEach(indexTree);
+})(rawTree);
+
+function countFiles(node) {
+  let c = 0;
+  if (node.files) c += node.files.length;
+  if (node.children) node.children.forEach(ch => c += countFiles(ch));
+  return c;
+}
+
+// 节点颜色 — 对齐 Obsidian Graph 配色
+// root: 紫色 accent, tag 按深度渐变（淡紫→蓝→青绿），file: 灰
+function nodeColor(node) {
+  if (node.type === 'root') return '#7f6df2';
+  if (node.type === 'file') return '#4e4e4e';
+  const depth = node.depth || 1;
+  const palette = [
+    '#a88bfa',  // depth 1: 淡紫
+    '#7c9cf5',  // depth 2: 蓝紫
+    '#6bb8c7',  // depth 3: 青蓝
+    '#5dab80',  // depth 4+: 青绿
+  ];
+  return palette[Math.min(depth - 1, palette.length - 1)];
+}
+
+function nodeSize(node) {
+  if (node.type === 'root') return 6;
+  if (node.type === 'file') return 2;
+  const src = node._src || treeIndex[node.id];
+  const fc = src ? countFiles(src) : 0;
+  return Math.min(5, 2.5 + Math.log2(fc + 1) * 0.5);
+}
+
+// 完整构建（仅用于首次加载和展开/折叠全部）
+function buildFull() {
+  const nodes = [];
+  const links = [];
+
+  function walk(src, parentId, depth) {
+    const id = src.id;
+    const childItems = [];
+    if (src.children) childItems.push(...src.children);
+    if (src.files) childItems.push(...src.files);
+    const hasKids = childItems.length > 0;
+    const isOpen = expanded.has(id);
+
+    nodes.push({
+      id,
+      name: src.name,
+      type: src.type,
+      depth,
+      _src: src,
+      _hasKids: hasKids,
+      _open: isOpen,
+    });
+
+    if (parentId != null) {
+      links.push({ source: parentId, target: id });
+    }
+
+    if (isOpen) {
+      if (src.children) {
+        for (const ch of src.children) walk(ch, id, depth + 1);
+      }
+      if (src.files) {
+        for (const f of src.files) {
+          const fid = 'file:' + f;
+          nodes.push({ id: fid, name: f, type: 'file', depth: depth + 1, _src: null, _hasKids: false, _open: false });
+          links.push({ source: id, target: fid });
+        }
+      }
+    }
+  }
+
+  walk(rawTree, null, 0);
+  return { nodes, links };
+}
+
+// ---- 增量展开：在父节点附近插入子节点 ----
+function expandNode(parentGraphNode) {
+  const src = parentGraphNode._src || treeIndex[parentGraphNode.id];
+  if (!src) return;
+
+  expanded.add(parentGraphNode.id);
+  parentGraphNode._open = true;
+
+  const { nodes, links } = graph.graphData();
+  const px = parentGraphNode.x || 0;
+  const py = parentGraphNode.y || 0;
+  const depth = (parentGraphNode.depth || 0) + 1;
+
+  // 收集要添加的直接子节点
+  const toAdd = [];
+  if (src.children) {
+    for (const ch of src.children) {
+      const childItems = [];
+      if (ch.children) childItems.push(...ch.children);
+      if (ch.files) childItems.push(...ch.files);
+      toAdd.push({
+        id: ch.id,
+        name: ch.name,
+        type: ch.type,
+        depth,
+        _src: ch,
+        _hasKids: childItems.length > 0,
+        _open: false,
+        // 初始位置：在父节点附近随机偏移，避免堆叠
+        x: px + (Math.random() - 0.5) * 40,
+        y: py + (Math.random() - 0.5) * 40,
+        vx: 0, vy: 0,
+      });
+    }
+  }
+  if (src.files) {
+    for (const f of src.files) {
+      toAdd.push({
+        id: 'file:' + f,
+        name: f,
+        type: 'file',
+        depth,
+        _src: null,
+        _hasKids: false,
+        _open: false,
+        x: px + (Math.random() - 0.5) * 40,
+        y: py + (Math.random() - 0.5) * 40,
+        vx: 0, vy: 0,
+      });
+    }
+  }
+
+  const newLinks = toAdd.map(n => ({ source: parentGraphNode.id, target: n.id }));
+
+  // 直接 push 进现有数组
+  nodes.push(...toAdd);
+  links.push(...newLinks);
+
+  // 通知 force-graph 数据变了（不重建）
+  graph.graphData({ nodes, links });
+}
+
+// ---- 增量折叠：移除该节点的所有后代 ----
+function collapseNode(parentGraphNode) {
+  expanded.delete(parentGraphNode.id);
+  parentGraphNode._open = false;
+
+  // 递归收集所有要移除的后代 ID
+  const removeIds = new Set();
+  const { nodes, links } = graph.graphData();
+
+  // 建立 parentId → childIds 的临时索引
+  const childMap = {};
+  for (const link of links) {
+    const sid = typeof link.source === 'object' ? link.source.id : link.source;
+    const tid = typeof link.target === 'object' ? link.target.id : link.target;
+    if (!childMap[sid]) childMap[sid] = [];
+    childMap[sid].push(tid);
+  }
+
+  // BFS 收集后代
+  const queue = [parentGraphNode.id];
+  while (queue.length > 0) {
+    const pid = queue.shift();
+    const kids = childMap[pid] || [];
+    for (const kid of kids) {
+      if (kid !== parentGraphNode.id) {
+        removeIds.add(kid);
+        expanded.delete(kid); // 后代的展开状态也清除
+        queue.push(kid);
+      }
+    }
+  }
+
+  // 过滤掉要删的
+  const newNodes = nodes.filter(n => !removeIds.has(n.id));
+  const newLinks = links.filter(l => {
+    const sid = typeof l.source === 'object' ? l.source.id : l.source;
+    const tid = typeof l.target === 'object' ? l.target.id : l.target;
+    return !removeIds.has(sid) && !removeIds.has(tid);
+  });
+
+  graph.graphData({ nodes: newNodes, links: newLinks });
+}
+
+// ============================================================
+// 初始化
+// ============================================================
+
+async function init() {
+  const loadingEl = document.getElementById('loading');
+
+  const ok = await loadForceGraph();
+  if (!ok) {
+    loadingEl.innerHTML = '❌ 图谱引擎加载失败（CDN 不可达）<br><small style="color:#666">请检查网络连接后刷新</small>';
+    return;
+  }
+
+  loadingEl.remove();
+
+  const el = document.getElementById('graph');
+
+  graph = ForceGraph()(el)
+    .graphData(buildFull())
+    .backgroundColor('#202020')
+    .width(el.clientWidth)
+    .height(el.clientHeight)
+    .nodeId('id')
+    .nodeRelSize(1)
+    .nodeVal(n => nodeSize(n))
+    .nodeCanvasObject((node, ctx, globalScale) => {
+      const r = nodeSize(node);
+      const color = nodeColor(node);
+
+      // 圆点 + 微光晕
+      if (node.type !== 'file') {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r + 2, 0, 2 * Math.PI);
+        ctx.fillStyle = color + '18';  // 极淡光晕
+        ctx.fill();
+      }
+
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
+      ctx.fillStyle = color;
+      ctx.fill();
+
+      // hover 高亮
+      if (node === graph.hoverNode) {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r + 1.5, 0, 2 * Math.PI);
+        ctx.strokeStyle = '#fff';
+        ctx.lineWidth = 1.2 / globalScale;
+        ctx.stroke();
+      }
+
+      // 未展开的 tag — 小圆环提示还有子节点
+      if (node._hasKids && !node._open) {
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, r + 3.5, 0, 2 * Math.PI);
+        ctx.strokeStyle = color + '55';
+        ctx.lineWidth = 0.8 / globalScale;
+        ctx.setLineDash([2 / globalScale, 2 / globalScale]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+      }
+
+      // 文字
+      const isFile = node.type === 'file';
+      const fontSize = isFile
+        ? Math.max(8, 10 / globalScale)
+        : Math.max(9, Math.min(14, 12 / globalScale));
+      const fontWeight = (node.type === 'root') ? 'bold ' : '';
+      ctx.font = `${fontWeight}${fontSize}px -apple-system, BlinkMacSystemFont, 'Inter', sans-serif`;
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'top';
+      ctx.fillStyle = isFile
+        ? '#777'
+        : (node === graph.hoverNode ? '#fff' : '#b0b0b0');
+      ctx.fillText(node.name, node.x, node.y + r + 3);
+    })
+    .nodeCanvasObjectMode(() => 'replace')
+
+    .linkColor(() => '#3a3a3a')
+    .linkWidth(0.6)
+
+    .onNodeHover(node => {
+      graph.hoverNode = node;
+      el.style.cursor = node ? 'pointer' : 'default';
+    })
+
+    .onNodeClick(node => {
+      if (node.type === 'file') {
+        alert('打开笔记: ' + node.name);
+        return;
+      }
+      if (!node._hasKids) return;
+
+      if (node._open) {
+        collapseNode(node);
+      } else {
+        expandNode(node);
+      }
+      updateStats();
+    })
+
+    .nodePointerAreaPaint((node, color, ctx) => {
+      // 加大点击区域
+      const r = Math.max(nodeSize(node) + 4, 8);
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
+      ctx.fillStyle = color;
+      ctx.fill();
+    })
+
+    .warmupTicks(100)
+    .cooldownTicks(200);
+
+  // 力参数配置 —— 通过 d3Force() 获取已有的力引用来修改参数
+  // 而不是用 d3 全局变量（内嵌浏览器可能没有 d3 全局）
+  const chargeForce = graph.d3Force('charge');
+  if (chargeForce && chargeForce.strength) chargeForce.strength(-120);
+
+  const linkForce = graph.d3Force('link');
+  if (linkForce) {
+    if (linkForce.distance) linkForce.distance(50);
+    if (linkForce.strength) linkForce.strength(0.8);
+  }
+
+  const centerForce = graph.d3Force('center');
+  if (centerForce && centerForce.strength) centerForce.strength(0.05);
+
+  graph.hoverNode = null;
+
+  // 等力模拟稳定后再 zoomToFit
+  setTimeout(() => { if (graph) graph.zoomToFit(400, 60); }, 1500);
+  setTimeout(() => { if (graph) graph.zoomToFit(400, 60); }, 3000);
+
+  window.addEventListener('resize', () => {
+    if (graph) graph.width(el.clientWidth).height(el.clientHeight);
+  });
+
+  updateStats();
+}
+
+// ============================================================
+// 工具栏
+// ============================================================
+
+function doExpandAll() {
+  function markAll(node) {
+    if (node.type !== 'file') expanded.add(node.id);
+    if (node.children) node.children.forEach(markAll);
+  }
+  markAll(rawTree);
+  if (graph) {
+    graph.graphData(buildFull());
+    updateStats();
+    setTimeout(() => graph.zoomToFit(400, 40), 800);
+  }
+}
+
+function doCollapseAll() {
+  expanded.clear();
+  expanded.add('root');
+  if (graph) {
+    graph.graphData(buildFull());
+    updateStats();
+    setTimeout(() => graph.zoomToFit(400, 60), 800);
+  }
+}
+
+function updateStats() {
+  const { nodes } = graph ? graph.graphData() : { nodes: [] };
+  let tags = 0, files = 0;
+  nodes.forEach(n => { if (n.type === 'tag') tags++; if (n.type === 'file') files++; });
+  const t = `${nodes.length} 节点 · ${tags} 标签 · ${files} 笔记`;
+  document.getElementById('stats').textContent = t;
+  document.getElementById('statsBar').textContent = t;
+}
+
+// 启动
+init();
+</script>
+</body>
+</html>
