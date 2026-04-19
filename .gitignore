@@ -14,6 +14,9 @@ test-vault/
 # Working memory / CodeBuddy internals
 .workbuddy/
 
+# Personal onboarding notes (not related to this plugin)
+vibe-coding-onboarding/
+
 # OS files
 .DS_Store
 Thumbs.db

@@ -148,7 +148,7 @@ export async function generateTaxonomySchema(
   let totalTokens = estimateTokens(allText);
 
   if (totalTokens > 120000 && settings.schemaContextMode === 'full') {
-    console.warn(`MECE: 全文模式 token 过多 (~${totalTokens})，自动降级为 first-500`);
+    console.warn(`Atlas: 全文模式 token 过多 (~${totalTokens})，自动降级为 first-500`);
     // 降级：只保留前 500 字
     for (const n of notes) {
       n.content = stripFrontmatter(n.content).substring(0, 500);
@@ -161,7 +161,8 @@ export async function generateTaxonomySchema(
     phase: 'schema-gen',
     current: 0,
     total: 1,
-    message: `AI 分析 ${notes.length} 篇笔记（~${totalTokens.toLocaleString()} tokens）...`,
+    indeterminate: true,
+    message: `正在分析 ${notes.length} 篇笔记（~${totalTokens.toLocaleString()} tokens）...`,
   });
 
   const maxDepth = 3; // 固定最大 3 层

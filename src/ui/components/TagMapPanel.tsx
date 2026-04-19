@@ -1,8 +1,9 @@
 import React, { useState, useCallback, useEffect, useRef, useMemo } from 'react';
-import { setIcon } from 'obsidian';
+import { setIcon, Menu } from 'obsidian';
 import type MECEPlugin from '../../main';
-import type { TaxonomyNode, TaxonomySchema } from '../../types';
-import { VAULT_SCOPE_KEY } from '../../types';
+import type { TaxonomyNode, AIProviderType } from '../../types';
+import { getApiKey, setModel, switchProvider } from '../../types';
+import { findScopeNode, buildScopeViewSchema, replaceScopeNode } from '../../core/taxonomy-scope';
 import { ForceGraphView } from './ForceGraphView';
 import { EmptyState } from './EmptyState';
 import { UnifiedOrganizer } from './UnifiedOrganizer';
@@ -10,77 +11,19 @@ import { UnifiedOrganizer } from './UnifiedOrganizer';
 // ============================================================
 // TagMapPanel — Tag 面板主容器
 // 整理笔记（默认视图） + 脑图浏览（切换视图）
+//
+// 架构：全局只有一份 taxonomy，folderFilter 只决定"展示/操作哪些笔记"
 // ============================================================
 
 interface TagMapPanelProps {
   plugin: MECEPlugin;
+  /** 外部触发刷新的版本号（每次递增会导致组件重新计算 store 数据） */
+  refreshKey?: number;
 }
 
 type ViewMode = 'organize' | 'graph';
 
-/**
- * 聚合 Vault scope 下所有子目录的 schema
- * 返回一个只读的虚拟 schema：root="全部"，每个子目录是一级分类
- * 同时返回 scopes 列表，供 UnifiedOrganizer 对笔记 tag 做前缀补齐
- */
-function buildAggregatedTaxonomy(plugin: MECEPlugin): {
-  taxonomy: TaxonomySchema;
-  scopes: Array<{ folderPath: string; displayName: string }>;
-} | null {
-  const allScopes = plugin.storeManager.listScopes().filter(s => s !== VAULT_SCOPE_KEY);
-  if (allScopes.length === 0) return null;
-
-  const nodes: TaxonomyNode[] = [];
-  const scopes: Array<{ folderPath: string; displayName: string }> = [];
-  let latest = 0;
-  for (const scope of allScopes) {
-    const sub = plugin.storeManager.getTaxonomy(scope);
-    if (!sub) continue;
-    const subName = sub.rootName || scope.split('/').pop() || scope;
-
-    // 把子 schema 的 nodes 搬到以 scope 命名的一级分类下
-    // 重新计算 fullPath：从 subName 开始
-    const rewrittenChildren = sub.nodes.map(n => rewritePaths(n, subName));
-
-    nodes.push({
-      id: `scope:${scope}`,
-      name: subName,
-      fullPath: subName,
-      description: `来自「${scope}」的分类`,
-      children: rewrittenChildren,
-    });
-
-    scopes.push({ folderPath: scope, displayName: subName });
-
-    const ts = new Date(sub.updatedAt).getTime();
-    if (ts > latest) latest = ts;
-  }
-
-  if (nodes.length === 0) return null;
-
-  return {
-    taxonomy: {
-      version: 1,
-      createdAt: new Date().toISOString(),
-      updatedAt: new Date(latest || Date.now()).toISOString(),
-      maxDepth: 3,
-      rootName: '全部',
-      nodes,
-    },
-    scopes,
-  };
-}
-
-function rewritePaths(node: TaxonomyNode, parentPath: string): TaxonomyNode {
-  const fullPath = `${parentPath}/${node.name}`;
-  return {
-    ...node,
-    fullPath,
-    children: (node.children || []).map(c => rewritePaths(c, fullPath)),
-  };
-}
-
-export function TagMapPanel({ plugin }: TagMapPanelProps) {
+export function TagMapPanel({ plugin, refreshKey = 0 }: TagMapPanelProps) {
   const [stats, setStats] = useState({ nodes: 0, tags: 0, files: 0 });
   const [view, setView] = useState<ViewMode>('organize');
   const [folderFilter, setFolderFilter] = useState<string | undefined>(plugin.targetFolder);
@@ -93,37 +36,146 @@ export function TagMapPanel({ plugin }: TagMapPanelProps) {
     return () => { app.workspace.off('layout-change', onChange); };
   }, [app]);
 
+  // refreshKey 变化（外部 refreshView 调用）→ 触发 memo 重算
+  const effectiveTick = tick + refreshKey;
+
   const settings = plugin.settings;
 
-  // 尝试拿直接的 schema
-  const directTaxonomy = plugin.storeManager.getTaxonomy(folderFilter);
-
-  // Vault scope 下没有直接 schema，尝试聚合子目录的
-  const aggregated = useMemo(() => {
-    if (folderFilter) return null;  // 只有 Vault scope 才聚合
-    if (directTaxonomy) return null;
-    return buildAggregatedTaxonomy(plugin);
+  // 全局唯一 taxonomy（useMemo 带 effectiveTick，外部刷新能重读 store）
+  const rootTaxonomy = useMemo(
+    () => plugin.storeManager.getTaxonomy(),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [folderFilter, directTaxonomy, tick]);
+    [plugin, effectiveTick],
+  );
 
-  const taxonomy = directTaxonomy || aggregated?.taxonomy || null;
-  const isAggregated = !directTaxonomy && !!aggregated;
+  // 子文件夹 scope 下：从全局 taxonomy 里找一个 fullPath 严格等于文件夹路径的一级节点，
+  // 以它为视图根展示切片。未命中则 scopeNode=null（走"此文件夹无对应分类"空态）。
+  const scopeNode = useMemo(() => {
+    if (!folderFilter || !rootTaxonomy) return null;
+    return findScopeNode(rootTaxonomy, folderFilter);
+  }, [folderFilter, rootTaxonomy]);
+
+  const isSliceMode = !!folderFilter && !!rootTaxonomy;
+
+  // 实际传给 UnifiedOrganizer 的 schema：
+  // - 无 folderFilter：直接用全局
+  // - 有 folderFilter 且命中：切片视图
+  // - 有 folderFilter 但未命中：null（下面会走提示空态）
+  const taxonomy = useMemo(() => {
+    if (!rootTaxonomy) return null;
+    if (!isSliceMode) return rootTaxonomy;
+    if (!scopeNode) return null;
+    return buildScopeViewSchema(rootTaxonomy, scopeNode);
+  }, [rootTaxonomy, isSliceMode, scopeNode]);
+
   const hasSchema = taxonomy !== null;
 
   const isAIConfigured = settings.aiProvider === 'ollama'
     ? !!(settings.ollamaHost && settings.ollamaHost.trim())
-    : !!(settings.apiKey && settings.apiKey.trim());
+    : !!getApiKey(settings);
 
   const providerNames: Record<string, string> = { ollama: 'Ollama', openai: 'OpenAI', claude: 'Claude', deepseek: 'DeepSeek' };
   const providerName = providerNames[settings.aiProvider] || settings.aiProvider;
-  const providerLabel = `${providerName} · ${settings.model || '默认模型'}`;
+  // 模型友好名映射（只在 UI 展示；真实 id 保存在 settings.model）
+  const modelFriendlyName = (id: string): string => {
+    const map: Record<string, string> = {
+      'claude-sonnet-4-20250514': 'Sonnet 4',
+      'claude-3-5-sonnet-20241022': 'Sonnet 3.5',
+      'claude-3-5-haiku-20241022': 'Haiku 3.5',
+      'claude-opus-4-20250514': 'Opus 4',
+      'gpt-4o': 'GPT-4o',
+      'gpt-4o-mini': 'GPT-4o mini',
+      'gpt-4-turbo': 'GPT-4 Turbo',
+      'o1-mini': 'o1-mini',
+      'deepseek-chat': 'DeepSeek Chat',
+      'deepseek-reasoner': 'DeepSeek Reasoner',
+    };
+    return map[id] || id;
+  };
+  const providerLabel = `${providerName} · ${settings.model ? modelFriendlyName(settings.model) : '默认模型'}`;
 
   const openSettings = useCallback(() => {
     (app as any).setting?.open();
     setTimeout(() => {
-      (app as any).setting?.openTabById?.('obsidian-mece-knowledge');
+      (app as any).setting?.openTabById?.('atlas-knowledge');
     }, 100);
   }, [app]);
+
+  // 点击 provider pill 弹出菜单：切换模型 / 切换 provider / 打开设置
+  const openProviderMenu = useCallback((evt: React.MouseEvent) => {
+    const menu = new Menu();
+    const curProvider = plugin.settings.aiProvider;
+    const curModel = plugin.settings.model || '';
+
+    // ---- 当前 provider 的常用模型（label = 友好名；id = 真实模型名）----
+    const modelsByProvider: Record<AIProviderType, Array<{ id: string; label: string }>> = {
+      claude: [
+        { id: 'claude-sonnet-4-20250514',    label: 'Sonnet 4' },
+        { id: 'claude-3-5-sonnet-20241022',  label: 'Sonnet 3.5' },
+        { id: 'claude-3-5-haiku-20241022',   label: 'Haiku 3.5' },
+        { id: 'claude-opus-4-20250514',      label: 'Opus 4' },
+      ],
+      openai: [
+        { id: 'gpt-4o',       label: 'GPT-4o' },
+        { id: 'gpt-4o-mini',  label: 'GPT-4o mini' },
+        { id: 'gpt-4-turbo',  label: 'GPT-4 Turbo' },
+        { id: 'o1-mini',      label: 'o1-mini' },
+      ],
+      deepseek: [
+        { id: 'deepseek-chat',      label: 'DeepSeek Chat' },
+        { id: 'deepseek-reasoner',  label: 'DeepSeek Reasoner' },
+      ],
+      ollama: [
+        { id: 'qwen2.5',     label: 'Qwen 2.5' },
+        { id: 'qwen2.5:14b', label: 'Qwen 2.5 (14B)' },
+        { id: 'llama3.1',    label: 'Llama 3.1' },
+        { id: 'llama3.2',    label: 'Llama 3.2' },
+        { id: 'mistral',     label: 'Mistral' },
+      ],
+    };
+    const models = modelsByProvider[curProvider] || [];
+
+    menu.addItem((item) => {
+      item.setTitle(`模型（${providerNames[curProvider] || curProvider}）`).setIsLabel(true);
+    });
+    for (const m of models) {
+      menu.addItem((item) => {
+        item.setTitle(m.label).setChecked(m.id === curModel).onClick(async () => {
+          setModel(plugin.settings, curProvider, m.id);
+          await plugin.saveSettings();
+        });
+      });
+    }
+
+    menu.addSeparator();
+
+    // ---- 切换 Provider（未配 key 的 provider 置灰，点击跳转到设置）----
+    menu.addItem((item) => item.setTitle('切换 AI 提供商').setIsLabel(true));
+    const providerKeys: AIProviderType[] = ['claude', 'openai', 'deepseek', 'ollama'];
+    for (const p of providerKeys) {
+      const needsKey = p !== 'ollama';
+      const hasKey = !needsKey || !!getApiKey(plugin.settings, p);
+      const label = providerNames[p] || p;
+      const title = hasKey ? label : `${label} · 未配置 Key`;
+      menu.addItem((item) => {
+        item.setTitle(title).setChecked(p === curProvider);
+        if (!hasKey) item.setDisabled(true);
+        item.onClick(async () => {
+          if (p === curProvider) return;
+          if (!hasKey) { openSettings(); return; }
+          switchProvider(plugin.settings, p);
+          await plugin.saveSettings();
+        });
+      });
+    }
+
+    menu.addSeparator();
+    menu.addItem((item) => {
+      item.setTitle('打开设置…').setIcon('settings').onClick(() => openSettings());
+    });
+
+    menu.showAtMouseEvent(evt.nativeEvent);
+  }, [plugin, openSettings]);
 
   const handleFileOpen = useCallback((filePath: string) => {
     app.workspace.openLinkText(filePath, '', false);
@@ -141,36 +193,97 @@ export function TagMapPanel({ plugin }: TagMapPanelProps) {
   }, [plugin, handleFolderChange]);
 
   const handleSchemaChange = useCallback(async (newNodes: TaxonomyNode[]) => {
-    if (!taxonomy || isAggregated) return;  // 聚合视图只读
+    if (!rootTaxonomy || !taxonomy) return;
+
+    // 切片模式：把视图根节点（scopeNode）的 children 替换回全局 taxonomy
+    if (isSliceMode && scopeNode) {
+      const updated = replaceScopeNode(rootTaxonomy, scopeNode.id, taxonomy.rootName, newNodes);
+      if (updated) await plugin.storeManager.setTaxonomy(updated);
+      setTick(t => t + 1);
+      return;
+    }
+
+    // 非切片：直接替换全局 taxonomy 的 nodes
     const updated = {
-      ...taxonomy,
+      ...rootTaxonomy,
       nodes: newNodes,
       updatedAt: new Date().toISOString(),
     };
-    await plugin.storeManager.setTaxonomy(folderFilter, updated);
+    await plugin.storeManager.setTaxonomy(updated);
     setTick(t => t + 1);
-  }, [taxonomy, plugin, folderFilter, isAggregated]);
+  }, [rootTaxonomy, taxonomy, isSliceMode, scopeNode, plugin]);
 
   const handleRootRename = useCallback(async (newName: string) => {
-    if (!taxonomy || isAggregated) return;
+    if (!rootTaxonomy || !taxonomy) return;
+
+    // 切片模式：重命名 = 改对应一级节点的 name（并级联重写子树 fullPath）
+    if (isSliceMode && scopeNode) {
+      const updated = replaceScopeNode(rootTaxonomy, scopeNode.id, newName, taxonomy.nodes);
+      if (updated) await plugin.storeManager.setTaxonomy(updated);
+      setTick(t => t + 1);
+      return;
+    }
+
+    // 非切片：改全局 taxonomy 的 rootName
     const updated = {
-      ...taxonomy,
+      ...rootTaxonomy,
       rootName: newName,
       updatedAt: new Date().toISOString(),
     };
-    await plugin.storeManager.setTaxonomy(folderFilter, updated);
+    await plugin.storeManager.setTaxonomy(updated);
     setTick(t => t + 1);
-  }, [taxonomy, plugin, folderFilter, isAggregated]);
+  }, [rootTaxonomy, taxonomy, isSliceMode, scopeNode, plugin]);
 
-  // ---- 没配 AI 或没 Schema → 空状态 ----
-  if (!isAIConfigured || !hasSchema) {
+  // ---- 切片未命中（全局有 schema 但当前文件夹没对应一级节点） ----
+  if (isAIConfigured && rootTaxonomy && isSliceMode && !scopeNode) {
+    const folderLabel = folderFilter!.split('/').pop() || folderFilter!;
     return (
       <div className="mece-panel-root">
         <TopBar
           isAIConfigured={isAIConfigured}
           providerLabel={providerLabel}
-          folderFilter={folderFilter}
-          onChooseFolder={chooseFolder}
+          onPickProvider={openProviderMenu}
+          onOpenSettings={openSettings}
+        />
+        <div className="mece-empty-state">
+          <h3>此文件夹没有对应分类</h3>
+          <p>
+            全局分类体系里没有 fullPath 等于
+            <code style={{ margin: '0 4px' }}>{folderFilter}</code>
+            的一级节点。
+          </p>
+          <p style={{ opacity: 0.75 }}>
+            切回「整个 Vault」查看完整分类，或选择其它范围。
+          </p>
+          <div className="mece-empty-footer">
+            <button className="mece-btn mece-btn-primary" onClick={() => handleFolderChange(undefined)}>
+              切回整个 Vault
+            </button>
+            <button className="mece-btn mece-btn-subtle" onClick={chooseFolder} style={{ marginLeft: 8 }}>
+              换一个范围
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ---- 没配 AI 或没 Schema → 空状态 ----
+  if (!isAIConfigured || !hasSchema) {
+    // 判断当前范围是否没有笔记（空文件夹 / 空 Vault）
+    const filesInScope = app.vault.getMarkdownFiles().filter(f => {
+      if (!folderFilter) return true;
+      const prefix = folderFilter.endsWith('/') ? folderFilter : folderFilter + '/';
+      return f.path.startsWith(prefix);
+    });
+    const isEmptyFolder = isAIConfigured && filesInScope.length === 0;
+
+    return (
+      <div className="mece-panel-root">
+        <TopBar
+          isAIConfigured={isAIConfigured}
+          providerLabel={providerLabel}
+          onPickProvider={openProviderMenu}
           onOpenSettings={openSettings}
         />
         <EmptyState
@@ -178,8 +291,10 @@ export function TagMapPanel({ plugin }: TagMapPanelProps) {
           hasSchema={hasSchema}
           providerLabel={providerLabel}
           folderLabel={folderFilter ? folderFilter.split('/').pop() || folderFilter : '整个 Vault'}
+          isEmptyFolder={isEmptyFolder}
           onOpenSettings={openSettings}
           onGenerateSchema={() => plugin.generateSchema(true)}
+          onChooseFolder={chooseFolder}
         />
       </div>
     );
@@ -191,8 +306,9 @@ export function TagMapPanel({ plugin }: TagMapPanelProps) {
       <TopBar
         isAIConfigured={isAIConfigured}
         providerLabel={providerLabel}
-        folderFilter={folderFilter}
-        onChooseFolder={chooseFolder}
+        onPickProvider={openProviderMenu}
+        onAIReorganize={() => plugin.openReorganize()}
+        onOrganizeFiles={() => plugin.organizeFilesByCategory(folderFilter || null)}
         onOpenSettings={openSettings}
       />
       <div className="mece-view-tabs">
@@ -210,23 +326,24 @@ export function TagMapPanel({ plugin }: TagMapPanelProps) {
         </button>
       </div>
 
-      {isAggregated && (
-        <div className="mece-aggregated-hint">
-          聚合视图：汇总所有子目录的分类。若要编辑分类，请切换到对应子目录。
-        </div>
-      )}
-
       {view === 'organize' ? (
         <UnifiedOrganizer
           app={app}
           taxonomy={taxonomy}
           folderFilter={folderFilter}
-          readOnly={isAggregated}
-          aggregateScopes={aggregated?.scopes}
+          readOnly={false}
           onSchemaChange={handleSchemaChange}
           onRootRename={handleRootRename}
-          onAIReorganize={isAggregated ? undefined : () => plugin.generateSchema(true)}
+          onTagUntagged={(files) => plugin.tagFiles(files)}
+          onChooseFolder={chooseFolder}
           onFileOpen={handleFileOpen}
+          refreshKey={effectiveTick}
+          fileSystemSync={{
+            renameFolder: (a, b) => plugin.renameFolderPath(a, b),
+            deleteFolderMoveNotesToRoot: (p) => plugin.deleteFolderMoveNotesToRoot(p),
+            ensureFolder: (p) => plugin.ensureFolder(p),
+            moveFileToFolder: (f, target) => plugin.moveFileToFolder(f, target),
+          }}
         />
       ) : (
         <ForceGraphView
@@ -256,13 +373,13 @@ function IconHost({ icon, className, style }: { icon: string; className?: string
     if (innerRef.current.parentNode !== host) {
       host.appendChild(innerRef.current);
     }
-    innerRef.current.innerHTML = '';
+    innerRef.current.replaceChildren();
     setIcon(innerRef.current, icon);
   };
 
   useEffect(() => {
     if (innerRef.current) {
-      innerRef.current.innerHTML = '';
+      innerRef.current.replaceChildren();
       setIcon(innerRef.current, icon);
     }
   }, [icon]);
@@ -270,34 +387,56 @@ function IconHost({ icon, className, style }: { icon: string; className?: string
   return <span ref={setHost} className={className} style={style} />;
 }
 
-function TopBar({ isAIConfigured, providerLabel, folderFilter, onChooseFolder, onOpenSettings }: {
+function TopBar({ isAIConfigured, providerLabel, onPickProvider, onAIReorganize, onOrganizeFiles, onOpenSettings }: {
   isAIConfigured: boolean;
   providerLabel: string;
-  folderFilter: string | undefined;
-  onChooseFolder: () => void;
+  /** 点击 provider pill 时弹出模型/提供商切换菜单 */
+  onPickProvider?: (evt: React.MouseEvent) => void;
+  /** AI 重新归类；传 undefined 则不渲染按钮（聚合视图下不允许） */
+  onAIReorganize?: () => void;
+  /** 按分类整理文件夹；传 undefined 则不渲染 */
+  onOrganizeFiles?: () => void;
   onOpenSettings: () => void;
 }) {
-  const folderLabel = folderFilter
-    ? folderFilter.split('/').pop() || folderFilter
-    : '整个 Vault';
-
   return (
     <div className={`mece-ai-status ${isAIConfigured ? 'mece-ai-status-ok' : 'mece-ai-status-warn'}`}>
-      <span className="mece-ai-status-text">
-        {isAIConfigured ? providerLabel : '未配置 AI'}
-      </span>
-      <button
-        className="mece-topbar-folder"
-        onClick={onChooseFolder}
-        title={folderFilter || '选择范围：整个 Vault'}
-        aria-label="选择文件夹范围"
-      >
-        <IconHost icon="folder" className="mece-topbar-folder-icon" />
-        <span className="mece-topbar-folder-label">{folderLabel}</span>
-      </button>
-      <button className="mece-ai-status-action" onClick={onOpenSettings} title="插件设置" aria-label="设置">
-        <IconHost icon="settings" />
-      </button>
+      {isAIConfigured && onPickProvider ? (
+        <button
+          className="mece-ai-status-pill"
+          onClick={onPickProvider}
+          aria-label="切换模型或 AI 提供商"
+        >
+          <span className="mece-ai-status-pill-text">{providerLabel}</span>
+          <IconHost icon="chevron-down" className="mece-ai-status-pill-caret" />
+        </button>
+      ) : (
+        <span className="mece-ai-status-text">
+          {isAIConfigured ? providerLabel : '未配置 AI'}
+        </span>
+      )}
+      <div className="mece-ai-status-actions">
+        {onAIReorganize && (
+          <button
+            className="mece-ai-status-action"
+            onClick={onAIReorganize}
+            aria-label="AI 智能归类：按当前分类体系分析所有笔记的归属"
+          >
+            <IconHost icon="wand-sparkles" />
+          </button>
+        )}
+        {onOrganizeFiles && (
+          <button
+            className="mece-ai-status-action"
+            onClick={onOrganizeFiles}
+            aria-label="按分类整理文件夹：将笔记移动到以 tag 命名的文件夹下"
+          >
+            <IconHost icon="folder-tree" />
+          </button>
+        )}
+        <button className="mece-ai-status-action" onClick={onOpenSettings} aria-label="插件设置">
+          <IconHost icon="settings" />
+        </button>
+      </div>
     </div>
   );
 }

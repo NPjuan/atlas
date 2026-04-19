@@ -131,8 +131,67 @@
 }
 
 .mece-ai-status-text {
-  flex: 1;
   line-height: 1.4;
+}
+
+/* 右侧按钮组：用 margin-left: auto 推到最右 */
+.mece-ai-status-actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: auto;
+  flex-shrink: 0;
+}
+
+/* 可点击的 provider pill：点击弹出模型/Provider 菜单 */
+.mece-ai-status-pill {
+  min-width: 0;
+  max-width: 260px;
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px;
+  padding: 2px 8px !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+  color: var(--text-muted) !important;
+  font-size: 12px !important;
+  line-height: 1.4 !important;
+  height: auto !important;
+  min-height: 0 !important;
+  cursor: pointer;
+  text-align: left !important;
+  justify-content: flex-start !important;
+  transition: all 0.12s ease;
+}
+
+.mece-ai-status-pill:hover {
+  background: var(--background-modifier-hover) !important;
+  border-color: var(--background-modifier-border) !important;
+  color: var(--text-normal) !important;
+  box-shadow: none !important;
+}
+
+.mece-ai-status-pill-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+  flex: 0 1 auto;
+}
+
+.mece-ai-status-pill-caret {
+  display: inline-flex;
+  align-items: center;
+  flex-shrink: 0;
+  opacity: 0.6;
+}
+
+.mece-ai-status-pill-caret svg {
+  width: 12px !important;
+  height: 12px !important;
 }
 
 /* 覆盖 Obsidian 的默认 button 样式 */
@@ -377,6 +436,27 @@
   max-width: 420px;
 }
 
+.mece-empty-footer {
+  margin-top: 20px;
+  width: 100%;
+  max-width: 420px;
+  display: flex;
+  justify-content: center;
+}
+
+.mece-btn.mece-btn-subtle {
+  background: transparent !important;
+  border: 1px solid var(--background-modifier-border) !important;
+  color: var(--text-muted) !important;
+  box-shadow: none !important;
+}
+
+.mece-btn.mece-btn-subtle:hover {
+  background: var(--background-modifier-hover) !important;
+  color: var(--text-normal) !important;
+  border-color: var(--interactive-accent) !important;
+}
+
 /* ---- 步骤项 ---- */
 .mece-step {
   display: flex;
@@ -548,24 +628,78 @@
 
 .mece-organizer-search {
   flex: 1;
-  padding: 4px 10px;
-  border-radius: 4px;
-  border: 1px solid var(--background-modifier-border);
-  background: var(--background-primary);
-  color: var(--text-normal);
-  font-size: 12px;
-  outline: none;
+  height: 28px !important;
+  min-height: 28px !important;
+  max-height: 28px !important;
+  box-sizing: border-box !important;
+  padding: 0 10px !important;
+  margin: 0 !important;
+  border-radius: 4px !important;
+  border: 1px solid var(--background-modifier-border) !important;
+  background: var(--background-primary) !important;
+  color: var(--text-normal) !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  outline: none !important;
+  box-shadow: none !important;
   min-width: 0;
+  vertical-align: middle;
 }
 
 .mece-organizer-search:focus {
-  border-color: var(--interactive-accent);
+  border-color: var(--interactive-accent) !important;
+  box-shadow: none !important;
 }
 
 .mece-organizer-stats {
   font-size: 12px;
   color: var(--text-muted);
   white-space: nowrap;
+}
+
+/* 工具栏的文件夹范围选择按钮 */
+.mece-organizer-folder-btn {
+  display: inline-flex !important;
+  align-items: center !important;
+  gap: 4px;
+  height: 28px !important;
+  min-height: 28px !important;
+  max-height: 28px !important;
+  box-sizing: border-box !important;
+  padding: 0 10px !important;
+  margin: 0 !important;
+  background: transparent !important;
+  border: 1px solid var(--background-modifier-border) !important;
+  border-radius: 4px !important;
+  box-shadow: none !important;
+  color: var(--text-muted) !important;
+  font-size: 12px !important;
+  line-height: 1 !important;
+  cursor: pointer;
+  max-width: 140px;
+  min-width: 0 !important;
+  vertical-align: middle;
+  transition: all 0.12s ease;
+}
+
+.mece-organizer-folder-btn:hover {
+  background: var(--background-modifier-hover) !important;
+  border-color: var(--interactive-accent) !important;
+  color: var(--text-normal) !important;
+  box-shadow: none !important;
+}
+
+.mece-organizer-folder-btn svg {
+  width: 13px;
+  height: 13px;
+  flex-shrink: 0;
+}
+
+.mece-organizer-folder-btn-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
 }
 
 .mece-organizer-body {
@@ -660,6 +794,25 @@
   padding-left: 20px;
 }
 
+/*
+ * 竖线 / 横线 —— 对齐父级箭头中心
+ *
+ * 父 .mece-organizer-category: padding-left = 8, 第一个子 .arrow: width = 16
+ * → 父箭头中心距父行左外缘 = 8 + 16/2 = 16px
+ *
+ * 子 node-nested 的 position:absolute 基点是最近的 relative 祖先（上层 node）。
+ * 子 node-nested 自身左外缘相对上层 node 的 padding-box 左边 = 上层 node.padding-left = 0（非嵌套）或 20（嵌套）。
+ *
+ * 为了让竖线/横线总是对齐**直接父行**的箭头中心，统一用 `calc(父缩进 + 16px)`。
+ * 父缩进：当前 node-nested 的 padding-left = 20，所以父 arrow 中心在 node-nested 的 padding-box
+ * 坐标 = 20（node-nested 在其父内的左偏移）+ 0... 这个逻辑太绕，改用 **相对 node-nested 自身**：
+ * 父行的 arrow 中心与 node-nested 左外缘的水平距离 = -4（父缩进 20 - 自身缩进 20 + 父 arrow 中心 16 = 16，等价于 node-nested 内 16px 处）
+ *
+ * 简单方案：因为 node-nested 的 padding-left=20，子 category 左外缘在 node-nested 内 20px；
+ * 子 arrow 中心 = 20 + 8 + 8 = 36；父 arrow 中心 = 16（node-nested 外缘 + 16 = node-nested 内 -4 +20 = 16）
+ * → 竖线 left: 16，横线 width: 20px（从 16 → 36 = 子箭头中心）
+ */
+
 /* 竖线：从节点顶部延伸到底部，对准父级箭头中心 */
 .mece-organizer-node-nested::before {
   content: '';
@@ -670,24 +823,26 @@
   width: 1px;
   background: var(--background-modifier-border);
   pointer-events: none;
+  z-index: 1;  /* 高于 category 背景 */
 }
 
-/* 横线：从竖线水平延伸，对齐 category 行中心（箭头中心） */
+/* 横线：从竖线延伸到子箭头中心外缘（left:16 → 子箭头中心 36，但压到 arrow 左边缘 28 即可） */
 .mece-organizer-node-nested::after {
   content: '';
   position: absolute;
   left: 16px;
-  top: 19px;   /* category min-height 28 ≈ padding 5 + arrow 16/2 + 边距补偿 → 行中线约在 19px */
-  width: 8px;
+  top: 15px;              /* 对齐子 category 行中线（padding 5 + 文字约 9） */
+  width: 12px;            /* 延伸到子 arrow 左边缘（20 + 8 = 28, 距竖线 12px） */
   height: 1px;
   background: var(--background-modifier-border);
   pointer-events: none;
+  z-index: 1;
 }
 
 /* 最后一个兄弟：竖线只画到横线位置 */
 .mece-organizer-node-nested:last-child::before {
   bottom: auto;
-  height: 19px;
+  height: 15px;
 }
 
 .mece-organizer-empty {
@@ -731,6 +886,7 @@
   min-height: 28px;
 }
 
+/* hover / 拖拽悬停：直接用 background，避免伪元素和 stacking context 引发的事件异常 */
 .mece-organizer-category:hover {
   background: var(--background-modifier-hover);
 }
@@ -891,6 +1047,64 @@
   cursor: grabbing;
 }
 
+/* 刚被拖放进来的笔记 chip 闪烁一下，提示"落在这里" */
+.mece-organizer-file-flash {
+  animation: mece-chip-flash 1.2s ease-out;
+}
+
+/* 次位幽灵 chip：笔记主位在别处，这里只是它也有这个 tag 的引用 */
+.mece-organizer-file-ghost {
+  background: transparent !important;
+  border-style: dashed !important;
+  border-color: var(--background-modifier-border) !important;
+  color: var(--text-muted) !important;
+  cursor: pointer !important;
+  opacity: 0.7;
+}
+
+.mece-organizer-file-ghost:hover {
+  opacity: 1;
+  border-color: var(--interactive-accent) !important;
+  color: var(--interactive-accent) !important;
+}
+
+.mece-organizer-file-ghost .mece-organizer-file-name {
+  font-style: italic;
+}
+
+.mece-organizer-file-ghost-mark {
+  margin-left: 4px;
+  font-size: 11px;
+  color: var(--text-faint);
+  transform: translateY(-1px);
+  display: inline-block;
+}
+
+.mece-organizer-file-ghost:hover .mece-organizer-file-ghost-mark {
+  color: var(--interactive-accent);
+}
+
+@keyframes mece-chip-flash {
+  0% {
+    background: var(--interactive-accent);
+    color: var(--text-on-accent, #fff);
+    border-color: var(--interactive-accent);
+    transform: scale(1.1);
+    box-shadow: 0 0 0 4px rgba(var(--color-accent-rgb, 100, 100, 255), 0.25);
+  }
+  30% {
+    transform: scale(1);
+    box-shadow: 0 0 0 4px rgba(var(--color-accent-rgb, 100, 100, 255), 0.15);
+  }
+  100% {
+    background: var(--background-secondary);
+    color: var(--text-normal);
+    border-color: var(--background-modifier-border);
+    transform: scale(1);
+    box-shadow: 0 0 0 0 transparent;
+  }
+}
+
 .mece-organizer-file-name {
   overflow: hidden;
   text-overflow: ellipsis;
@@ -899,12 +1113,27 @@
 
 /* 未分类区 */
 .mece-organizer-unassigned {
-  border: 1px dashed var(--background-modifier-border);
-  border-radius: 6px;
+  /* 固定在 panel 底部的 footer 区域，不跟随 body 滚动 */
+  flex-shrink: 0;
+  border-top: 1px solid var(--background-modifier-border);
   padding: 10px 12px;
   background: var(--background-secondary);
-  transition: all 0.12s ease;
-  margin-top: 4px;
+  transition: background 0.12s ease, box-shadow 0.12s ease;
+  max-height: 40%;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+/* 未分类区内部的笔记列表：如果 chips 太多，这里出滚动条，不撑破底部 footer */
+.mece-organizer-unassigned .mece-organizer-unassigned-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  align-content: flex-start;
 }
 
 .mece-organizer-unassigned-title {
@@ -917,10 +1146,24 @@
   margin-bottom: 8px;
 }
 
-.mece-organizer-unassigned-list {
-  display: flex;
-  flex-wrap: wrap;
+.mece-organizer-unassigned-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  flex: 1;
+}
+
+.mece-organizer-unassigned-tag-btn {
+  display: inline-flex;
+  align-items: center;
   gap: 4px;
+  font-size: 12px;
+  padding: 3px 10px;
+}
+
+.mece-organizer-unassigned-tag-btn svg {
+  width: 12px;
+  height: 12px;
 }
 
 .mece-organizer-unassigned-empty {
@@ -1162,6 +1405,15 @@
 .mece-pr-header h3 {
   margin: 0 0 4px 0;
   font-size: 16px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mece-pr-header h3 svg {
+  width: 16px;
+  height: 16px;
+  color: var(--text-muted);
 }
 
 .mece-pr-desc {
@@ -1184,6 +1436,14 @@
   font-size: 12px;
   color: var(--text-muted);
   white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mece-pr-stat svg {
+  width: 12px;
+  height: 12px;
 }
 
 .mece-pr-stat-highlight {
@@ -1334,6 +1594,153 @@
   font-weight: 500;
 }
 
+/* 新分类 tag：带紫色徽章，强调"这个会改 Schema" */
+.mece-pr-tag-new-category {
+  background: rgba(138, 87, 255, 0.15);
+  color: var(--interactive-accent);
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.mece-pr-tag-new-badge {
+  display: inline-block;
+  padding: 0 5px;
+  font-size: 10px;
+  line-height: 14px;
+  font-weight: 600;
+  color: var(--text-on-accent, #fff);
+  background: var(--interactive-accent);
+  border-radius: 3px;
+  letter-spacing: 0.5px;
+}
+
+.mece-pr-stat-new {
+  color: var(--interactive-accent);
+}
+
+.mece-pr-new-hint {
+  color: var(--interactive-accent);
+  font-weight: 500;
+}
+
+.mece-btn-sublabel {
+  display: inline-block;
+  margin-left: 4px;
+  font-size: 11px;
+  opacity: 0.8;
+  font-weight: 400;
+}
+
+/* Tab 视图切换栏 */
+.mece-pr-tabs {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--background-modifier-border);
+  margin-bottom: 8px;
+}
+
+.mece-pr-tab {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: transparent !important;
+  border: 1px solid transparent !important;
+  box-shadow: none !important;
+  color: var(--text-muted);
+  font-size: 12px;
+  line-height: 1 !important;
+  padding: 4px 10px !important;
+  height: 26px !important;
+  min-height: 26px !important;
+  border-radius: 4px !important;
+  cursor: pointer;
+}
+
+.mece-pr-tab:hover {
+  color: var(--text-normal);
+  background: var(--background-modifier-hover) !important;
+}
+
+.mece-pr-tab-active {
+  color: var(--text-normal) !important;
+  background: var(--background-modifier-hover) !important;
+  border-color: var(--background-modifier-border) !important;
+  font-weight: 500;
+}
+
+.mece-pr-tabs-right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+/* 分类分组 */
+.mece-pr-group {
+  margin-bottom: 8px;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.mece-pr-group-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 10px;
+  background: var(--background-secondary);
+  cursor: default;
+}
+
+.mece-pr-group-toggle {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 2px !important;
+  height: auto !important;
+  min-height: 0 !important;
+  cursor: pointer;
+  color: var(--text-muted);
+  display: inline-flex;
+  align-items: center;
+}
+
+.mece-pr-group-toggle:hover {
+  color: var(--text-normal);
+}
+
+.mece-pr-group-path {
+  font-weight: 600;
+  color: var(--text-normal);
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex: 1;
+  font-size: 13px;
+}
+
+.mece-pr-group-path-new {
+  color: var(--interactive-accent);
+}
+
+.mece-pr-group-count {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.mece-pr-group-body {
+  padding: 4px 8px 6px 8px;
+  background: var(--background-primary);
+}
+
+.mece-pr-group-collapsed .mece-pr-group-header {
+  border-bottom: none;
+}
+
 .mece-pr-tag-removed {
   background: rgba(255, 80, 80, 0.12);
   color: var(--text-error, #e55);
@@ -1357,6 +1764,15 @@
 .mece-pr-new-categories h4 {
   margin: 0 0 6px 0;
   font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.mece-pr-new-categories h4 svg {
+  width: 14px;
+  height: 14px;
+  color: var(--interactive-accent);
 }
 
 .mece-pr-category-item {
@@ -1413,6 +1829,33 @@
   transition: width 0.3s ease;
 }
 
+/* 不定式进度条：覆盖的条在容器里来回滑 */
+.mece-progress-bar-indeterminate {
+  position: relative;
+}
+
+.mece-progress-bar-indeterminate .mece-progress-bar {
+  width: 40% !important;
+  position: absolute;
+  left: 0;
+  top: 0;
+  animation: mece-progress-indeterminate 1.6s ease-in-out infinite;
+  transition: none;
+}
+
+@keyframes mece-progress-indeterminate {
+  0%   { transform: translateX(-60%); }
+  50%  { transform: translateX(160%); }
+  100% { transform: translateX(-60%); }
+}
+
+.mece-progress-elapsed {
+  font-size: 0.75em;
+  color: var(--text-faint);
+  text-align: center;
+  margin-bottom: 0.5rem;
+}
+
 .mece-progress-text {
   font-size: 0.85em;
   color: var(--text-muted);
@@ -1456,4 +1899,246 @@
 .mece-confirm-buttons button.mod-warning {
   background: var(--interactive-accent);
   color: var(--text-on-accent);
+}
+
+/* ============================================================
+   ReorganizeModal — 重新归类配置弹窗
+   ============================================================ */
+
+.mece-reorganize-modal .modal-close-button {
+  top: 12px;
+  right: 12px;
+}
+
+.mece-reorganize {
+  padding: 4px;
+  min-width: 440px;
+}
+
+.mece-reorganize h3 {
+  margin: 0 0 8px 0;
+  font-size: 16px;
+}
+
+.mece-reorganize-desc {
+  margin: 0 0 20px 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.6;
+}
+
+.mece-reorganize-field {
+  margin-bottom: 18px;
+}
+
+.mece-reorganize-field label {
+  display: block;
+  font-size: 13px;
+  font-weight: 600;
+  margin-bottom: 6px;
+  color: var(--text-normal);
+}
+
+.mece-reorganize-select {
+  width: 100%;
+  padding: 6px 8px;
+  border-radius: 4px;
+  border: 1px solid var(--background-modifier-border);
+  background: var(--background-primary);
+  color: var(--text-normal);
+  font-size: 13px;
+  outline: none;
+}
+
+.mece-reorganize-select:focus {
+  border-color: var(--interactive-accent);
+}
+
+.mece-reorganize-intensity-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr 1fr;
+  gap: 8px;
+}
+
+.mece-reorganize-intensity-btn {
+  display: flex !important;
+  flex-direction: column !important;
+  align-items: flex-start !important;
+  justify-content: flex-start !important;
+  padding: 10px 12px !important;
+  background: var(--background-secondary) !important;
+  border: 1px solid var(--background-modifier-border) !important;
+  border-radius: 6px !important;
+  cursor: pointer;
+  text-align: left !important;
+  box-shadow: none !important;
+  transition: all 0.12s ease;
+  min-width: 0 !important;
+  width: 100% !important;
+  height: auto !important;
+  min-height: 0 !important;
+  gap: 4px;
+  white-space: normal !important;
+  font: inherit !important;
+  color: inherit !important;
+  line-height: 1.4 !important;
+}
+
+.mece-reorganize-intensity-btn:hover {
+  border-color: var(--interactive-accent) !important;
+  background: var(--background-modifier-hover) !important;
+  box-shadow: none !important;
+}
+
+.mece-reorganize-intensity-btn-active {
+  border-color: var(--interactive-accent) !important;
+  background: rgba(var(--color-accent-rgb, 100, 100, 255), 0.1) !important;
+}
+
+.mece-reorganize-intensity-btn::before,
+.mece-reorganize-intensity-btn::after {
+  content: none !important;
+  display: none !important;
+}
+
+.mece-reorganize-intensity-btn:focus,
+.mece-reorganize-intensity-btn:focus-visible {
+  outline: none !important;
+  box-shadow: none !important;
+}
+
+.mece-reorganize-intensity-label {
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--text-normal);
+  width: 100%;
+}
+
+.mece-reorganize-intensity-btn-active .mece-reorganize-intensity-label {
+  color: var(--interactive-accent);
+}
+
+.mece-reorganize-intensity-desc {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.5;
+  width: 100%;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.mece-reorganize-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+  padding-top: 14px;
+  border-top: 1px solid var(--background-modifier-border);
+}
+
+/* ============ FileMoveReviewModal ============ */
+.mece-file-move-modal .modal-content {
+  min-width: 640px;
+  max-width: 900px;
+}
+
+.mece-file-move-review {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.mece-fm-list {
+  max-height: 400px;
+  overflow-y: auto;
+  border: 1px solid var(--background-modifier-border);
+  border-radius: 6px;
+  padding: 4px;
+}
+
+.mece-fm-item {
+  display: flex;
+  gap: 10px;
+  padding: 8px 10px;
+  align-items: flex-start;
+  border-bottom: 1px solid var(--background-modifier-border);
+}
+.mece-fm-item:last-child { border-bottom: none; }
+
+.mece-fm-item-skip {
+  color: var(--text-muted);
+  align-items: center;
+  font-size: 12px;
+}
+
+.mece-fm-item-off {
+  opacity: 0.5;
+}
+
+.mece-fm-filename {
+  font-weight: 500;
+}
+
+.mece-fm-in-place {
+  font-size: 11px;
+  color: var(--text-faint);
+  margin-left: 6px;
+}
+
+.mece-fm-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.mece-fm-paths {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-family: var(--font-monospace);
+  font-size: 12px;
+  flex-wrap: wrap;
+}
+
+.mece-fm-from {
+  color: var(--text-muted);
+  text-decoration: line-through;
+  text-decoration-color: var(--text-faint);
+}
+
+.mece-fm-to {
+  color: var(--interactive-accent);
+  font-weight: 500;
+}
+
+.mece-fm-multi-tag,
+.mece-fm-conflict {
+  margin-top: 6px;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-muted);
+  align-items: center;
+}
+
+.mece-fm-conflict {
+  padding: 6px 8px;
+  background: rgba(255, 180, 0, 0.08);
+  border-radius: 4px;
+}
+
+.mece-fm-conflict svg {
+  color: var(--text-warning, #e5a000);
+}
+
+.mece-fm-tag-option,
+.mece-fm-conflict-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  cursor: pointer;
+}
+
+.mece-fm-hint {
+  font-weight: 500;
 }

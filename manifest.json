@@ -1,9 +1,11 @@
 {
-  "id": "obsidian-mece-knowledge",
-  "name": "MECE Knowledge Mind Map",
+  "id": "atlas-knowledge",
+  "name": "Atlas - AI Knowledge Categorizer",
   "version": "0.1.0",
-  "minAppVersion": "1.0.0",
-  "description": "AI-powered knowledge extraction and MECE classification, visualized as an interactive radial mind map.",
+  "minAppVersion": "1.5.0",
+  "description": "Let AI organize your notes into a clean taxonomy and auto-sort them into folders. Build a living map of your knowledge.",
   "author": "ekkopan",
+  "authorUrl": "https://github.com/NPjuan",
+  "fundingUrl": "",
   "isDesktopOnly": true
 }

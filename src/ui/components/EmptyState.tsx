@@ -9,20 +9,24 @@ interface EmptyStateProps {
   hasSchema: boolean;
   providerLabel: string;
   folderLabel: string;
+  /** 当前范围是否为空文件夹/Vault（无笔记），用于显示提示 */
+  isEmptyFolder?: boolean;
   onOpenSettings: () => void;
   onGenerateSchema: () => void;
+  /** 切换范围（点"换个范围"时调用） */
+  onChooseFolder?: () => void;
 }
 
 type StepStatus = 'done' | 'current' | 'pending';
 
-export function EmptyState({ isAIConfigured, hasSchema, providerLabel, folderLabel, onOpenSettings, onGenerateSchema }: EmptyStateProps) {
+export function EmptyState({ isAIConfigured, hasSchema, providerLabel, folderLabel, isEmptyFolder, onOpenSettings, onGenerateSchema, onChooseFolder }: EmptyStateProps) {
   const step1: StepStatus = isAIConfigured ? 'done' : 'current';
   const step2: StepStatus = !isAIConfigured ? 'pending' : 'current';
 
   return (
     <div className="mece-empty-state">
       <h3>MECE 知识分类</h3>
-      <p>AI 分析你的笔记库，自动建立分类体系并打标签。</p>
+      <p>AI 分析你的笔记库，自动建立分类体系并完成归类。</p>
 
       <div className="mece-empty-steps">
         <Step
@@ -37,11 +41,21 @@ export function EmptyState({ isAIConfigured, hasSchema, providerLabel, folderLab
           num={2}
           status={step2}
           text={`为「${folderLabel}」生成分类`}
-          detail="AI 扫描此范围的笔记 → 生成分类框架 → 为每篇笔记推荐标签并确认"
-          actionLabel={step2 === 'current' ? '开始' : undefined}
+          detail={isEmptyFolder
+            ? '当前范围还没有笔记，换一个范围或先添加一些笔记'
+            : 'AI 扫描此范围的笔记 → 生成分类框架 → 为每篇笔记推荐标签并确认'}
+          actionLabel={step2 === 'current' && !isEmptyFolder ? '开始' : undefined}
           onAction={onGenerateSchema}
         />
       </div>
+
+      {onChooseFolder && (
+        <div className="mece-empty-footer">
+          <button className="mece-btn mece-btn-subtle" onClick={onChooseFolder}>
+            换一个范围
+          </button>
+        </div>
+      )}
     </div>
   );
 }

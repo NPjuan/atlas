@@ -34,13 +34,13 @@ function ToolbarButton({ icon, label, onClick }: ToolbarButtonProps) {
     if (innerRef.current.parentNode !== btn) {
       btn.appendChild(innerRef.current);
     }
-    innerRef.current.innerHTML = '';
+    innerRef.current.replaceChildren();
     setIcon(innerRef.current, icon);
   };
 
   useEffect(() => {
     if (innerRef.current) {
-      innerRef.current.innerHTML = '';
+      innerRef.current.replaceChildren();
       setIcon(innerRef.current, icon);
     }
   }, [icon]);
@@ -49,7 +49,6 @@ function ToolbarButton({ icon, label, onClick }: ToolbarButtonProps) {
     <button
       ref={setHost}
       className="mece-graph-toolbar-btn"
-      title={label}
       aria-label={label}
       onClick={onClick}
     />

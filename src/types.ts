@@ -37,16 +37,20 @@ export interface TaxonomySchema {
 // ---- 数据存储 ----
 
 /** Store 版本号 */
-export const STORE_VERSION = 1;
+export const STORE_VERSION = 2;
 
-/** 整个 Vault 作为文件夹 key 时的特殊值 */
-export const VAULT_SCOPE_KEY = '__vault__';
+/** 存量 data.json 里可能存在的旧 scope key，load 时做迁移 */
+export const LEGACY_ROOT_KEY = 'root';
+export const LEGACY_VAULT_KEY = '__vault__';
 
 /** 插件数据（存储在 data.json） */
 export interface MECEStore {
   version: number;
-  /** 分类体系（按文件夹路径分隔），key='__vault__' 表示整个 Vault */
-  taxonomies: Record<string, TaxonomySchema>;
+  /**
+   * 全局唯一的分类体系。
+   * 整个插件只有一份 schema，UI 层按文件夹切换展示范围，不再按 scope 分裂。
+   */
+  taxonomy: TaxonomySchema | null;
   /** 已处理文件记录（增量检测用） */
   processedFiles: Record<string, ProcessedFileRecord>;
   /** 插件设置 */
@@ -61,12 +65,49 @@ export interface ProcessedFileRecord {
   taggedAt: string;
   /** 打上的 tag 数量 */
   tagCount: number;
+  /** AI 生成的笔记摘要（~100-150 字，用于归类时替代原文） */
+  summary?: string;
+  /** summary 对应的内容 hash；和 hash 不同表示摘要已过期需要重生成 */
+  summaryHash?: string;
 }
 
 // ---- AI 相关 ----
 
 /** AI 提供商类型 */
 export type AIProviderType = 'claude' | 'openai' | 'ollama' | 'deepseek';
+
+/** 读取指定 provider 的 API Key（不传 provider 则用当前的） */
+export function getApiKey(settings: MECESettings, provider?: AIProviderType): string {
+  const p = provider || settings.aiProvider;
+  return settings.apiKeys?.[p] || '';
+}
+
+/** 读取指定 provider 的模型名 */
+export function getModel(settings: MECESettings, provider?: AIProviderType): string {
+  const p = provider || settings.aiProvider;
+  return settings.models?.[p] || '';
+}
+
+/** 写入指定 provider 的 API Key，并同步 legacy 字段 */
+export function setApiKey(settings: MECESettings, provider: AIProviderType, key: string): void {
+  if (!settings.apiKeys) settings.apiKeys = {};
+  settings.apiKeys[provider] = key;
+  if (provider === settings.aiProvider) settings.apiKey = key;
+}
+
+/** 写入指定 provider 的模型名，并同步 legacy 字段 */
+export function setModel(settings: MECESettings, provider: AIProviderType, model: string): void {
+  if (!settings.models) settings.models = {};
+  settings.models[provider] = model;
+  if (provider === settings.aiProvider) settings.model = model;
+}
+
+/** 切换当前 provider，自动把 legacy apiKey/model 字段更新为新 provider 的值 */
+export function switchProvider(settings: MECESettings, next: AIProviderType): void {
+  settings.aiProvider = next;
+  settings.apiKey = settings.apiKeys?.[next] || '';
+  settings.model = settings.models?.[next] || '';
+}
 
 /** Schema 生成时读取笔记内容的模式 */
 export type SchemaContextMode = 'title-only' | 'first-500' | 'full';
@@ -78,8 +119,14 @@ export type ClassificationMode = 'mece' | 'discipline' | 'custom';
 export interface MECESettings {
   // -- AI 配置 --
   aiProvider: AIProviderType;
+  /** 当前 provider 的 API Key（兼容字段，实际读写走 apiKeys[provider]） */
   apiKey: string;
+  /** 当前 provider 的模型名（兼容字段，实际读写走 models[provider]） */
   model: string;
+  /** 各 provider 独立保存的 API Key，切换 provider 不丢失 */
+  apiKeys: Partial<Record<AIProviderType, string>>;
+  /** 各 provider 独立保存的模型名 */
+  models: Partial<Record<AIProviderType, string>>;
   ollamaHost: string;
   /** 自定义 OpenAI 兼容 API base URL */
   openaiBaseUrl: string;
@@ -97,6 +144,12 @@ export interface MECESettings {
   maxTagsPerFile: number;
   /** Tag 前缀（如 'mece/'），为空则不加 */
   tagPrefix: string;
+  /** AI 归类默认强度：保守/平衡/重构 */
+  defaultReorganizeIntensity: 'conservative' | 'balanced' | 'aggressive';
+  /** 归类策略：auto=按能力自动选，sequential=逐篇，batch=批量 */
+  taggingStrategy: 'auto' | 'sequential' | 'batch';
+  /** AI 归类完成并 apply 后自动把笔记迁移到对应分类文件夹（默认关） */
+  autoOrganizeFilesAfterTagging: boolean;
 
   // -- 扫描配置 --
   /** 排除的目录列表 */
@@ -107,27 +160,46 @@ export interface MECESettings {
 
 /** 默认设置 */
 export const DEFAULT_SETTINGS: MECESettings = {
-  aiProvider: 'ollama',
+  aiProvider: 'deepseek',
   apiKey: '',
   model: '',
+  apiKeys: {},
+  // 每个 provider 的推荐默认模型：切到某个 provider 时，如果用户没显式选过模型，
+  // 就用这里预置的值，避免 model 为空字符串导致 API 调用失败
+  models: {
+    claude: 'claude-sonnet-4-20250514',
+    openai: 'gpt-4o',
+    deepseek: 'deepseek-chat',
+    ollama: 'qwen2.5',
+  },
   ollamaHost: 'http://localhost:11434',
   openaiBaseUrl: '',
-  schemaContextMode: 'full',
+  // Schema 生成时每篇笔记送给 AI 的内容长度：
+  // first-500 在绝大多数场景下质量与 full 接近，token 消耗低 5-10 倍
+  // 想追求更准可手动改成 'full'
+  schemaContextMode: 'first-500',
   classificationMode: 'mece',
   customClassificationPrompt: '',
   maxTagsPerFile: 3,
   tagPrefix: '',
-  excludeDirs: ['templates', 'daily', '.obsidian'],
+  defaultReorganizeIntensity: 'conservative',
+  taggingStrategy: 'auto',
+  autoOrganizeFilesAfterTagging: true,
+  excludeDirs: ['templates', 'daily', '.obsidian', 'attachments'],
   maxFileCharsSkip: 50000,
 };
 
 /** 创建空 Store */
 export function createEmptyStore(): MECEStore {
+  const settings = { ...DEFAULT_SETTINGS };
+  // 兼容字段 apiKey/model 跟当前 provider 的 apiKeys/models 同步（默认空）
+  settings.apiKey = (settings.apiKeys && settings.apiKeys[settings.aiProvider]) || '';
+  settings.model = (settings.models && settings.models[settings.aiProvider]) || '';
   return {
     version: STORE_VERSION,
-    taxonomies: {},
+    taxonomy: null,
     processedFiles: {},
-    settings: { ...DEFAULT_SETTINGS },
+    settings,
   };
 }
 
@@ -208,6 +280,8 @@ export interface ScanProgress {
   total: number;
   currentFile?: string;
   message?: string;
+  /** true 时进度条显示不定式动画（current/total 无意义，比如整批一次性 AI 调用中） */
+  indeterminate?: boolean;
 }
 
 // ---- Schema 生成相关 ----

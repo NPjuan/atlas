@@ -4,17 +4,82 @@ import {
   MECESettings,
   TaxonomySchema,
   STORE_VERSION,
-  VAULT_SCOPE_KEY,
+  LEGACY_ROOT_KEY,
+  LEGACY_VAULT_KEY,
   createEmptyStore,
   DEFAULT_SETTINGS,
 } from '../types';
 
 /**
- * V3 Store 管理（全新设计，不兼容旧版本）
+ * 纯函数：把 data.json 里的原始数据迁移成当前版本的 Store。
+ *
+ * 负责：
+ * - v1 `taxonomies: Record<scope, schema>` → v2 单 `taxonomy`（优先取 root/__vault__）
+ * - 旧版 settings.apiKey/model 单值 → apiKeys/models 按 provider 独立
+ * - 字段兜底（taxonomy=null、processedFiles={}、settings 合并默认值）
+ *
+ * 不依赖 Obsidian / 文件系统，便于单测覆盖。
+ */
+export function migrateRawStore(raw: unknown): MECEStore {
+  if (!raw || typeof raw !== 'object') {
+    return createEmptyStore();
+  }
+  const rawAny = raw as any;
+
+  // v1 → v2: 多 scope → 单 schema
+  if (rawAny.taxonomies && !rawAny.taxonomy) {
+    const map: Record<string, TaxonomySchema> = rawAny.taxonomies || {};
+    const picked =
+      map[LEGACY_ROOT_KEY]
+      || map[LEGACY_VAULT_KEY]
+      || null;
+    rawAny.taxonomy = picked;
+    delete rawAny.taxonomies;
+  }
+
+  if (rawAny.version !== STORE_VERSION) {
+    rawAny.version = STORE_VERSION;
+  }
+
+  const store = rawAny as MECEStore;
+  if (!store.taxonomy) store.taxonomy = null;
+  if (!store.processedFiles) store.processedFiles = {};
+  store.settings = { ...DEFAULT_SETTINGS, ...store.settings };
+
+  const s = store.settings;
+  if (!s.apiKeys) s.apiKeys = {};
+  if (!s.models) s.models = {};
+  // 老存量数据兼容：apiKey/model 单值 → 优先写入 apiKeys[provider]/models[provider]
+  // （旧数据的显式选择必须被保留，不能被 DEFAULT 预置覆盖）
+  if (s.aiProvider && s.aiProvider !== 'ollama' && s.apiKey) {
+    s.apiKeys[s.aiProvider] = s.apiKey;
+  }
+  if (s.aiProvider && s.model) {
+    s.models[s.aiProvider] = s.model;
+  }
+  // 把 DEFAULT_SETTINGS 里预置的推荐模型/apiKey 补进现有 settings
+  // （只补没有显式设置过的 provider，老用户升级能拿到新预置而不被覆盖）
+  for (const [k, v] of Object.entries(DEFAULT_SETTINGS.apiKeys || {})) {
+    if (v && !s.apiKeys[k as keyof typeof s.apiKeys]) s.apiKeys[k as keyof typeof s.apiKeys] = v;
+  }
+  for (const [k, v] of Object.entries(DEFAULT_SETTINGS.models || {})) {
+    if (v && !s.models[k as keyof typeof s.models]) s.models[k as keyof typeof s.models] = v;
+  }
+  s.apiKey = s.apiKeys[s.aiProvider] || '';
+  s.model = s.models[s.aiProvider] || '';
+
+  return store;
+}
+
+/**
+ * Store 管理（单 schema 架构）
+ *
+ * 设计决策：整个插件只维护一份全局分类体系（`taxonomy`），
+ * UI 层的「文件夹过滤」只影响展示范围和处理范围，不再按 scope 存独立 schema。
  *
  * 存储：
- * - taxonomies: 按文件夹隔离的分类体系（key 为文件夹路径或 __vault__）
- * - processedFiles: 增量检测用的 hash + 打标签时间
+ * - taxonomy: 全局唯一的分类体系（可以为 null，表示还没生成）
+ * - processedFiles: 增量检测用的 hash + 归类时间
  * - settings: 插件设置
  *
  * 标签数据来自笔记 frontmatter（metadataCache），不在 store 中维护。
@@ -27,23 +92,26 @@ export class StoreManager {
     this.plugin = plugin;
   }
 
-  /** 加载 store */
+  /** 加载 store（含 v1 → v2 单 schema 迁移） */
   async load(): Promise<MECEStore> {
     if (this.store) return this.store;
 
     const raw = await this.plugin.loadData();
 
-    if (!raw || typeof raw !== 'object' || raw.version !== STORE_VERSION) {
-      console.log('MECE V3: 创建全新 Store');
+    if (!raw || typeof raw !== 'object') {
+      console.log('Atlas: 创建全新 Store');
       this.store = createEmptyStore();
       await this.save();
       return this.store;
     }
 
-    this.store = raw as MECEStore;
-    this.store.settings = { ...DEFAULT_SETTINGS, ...this.store.settings };
-    if (!this.store.taxonomies) this.store.taxonomies = {};
+    const hadOldShape = !!(raw as any).taxonomies;
+    this.store = migrateRawStore(raw);
+    if (hadOldShape) {
+      console.log('Atlas: 迁移 v1 → v2（多 scope schema → 单 schema）');
+    }
 
+    await this.save();
     return this.store;
   }
 
@@ -69,38 +137,27 @@ export class StoreManager {
     await this.save();
   }
 
-  // ---- Taxonomy（按文件夹） ----
+  // ---- Taxonomy（全局唯一） ----
 
-  /** folderPath: undefined 或空字符串表示整个 Vault */
-  private folderKey(folderPath: string | undefined): string {
-    return folderPath && folderPath.trim() ? folderPath : VAULT_SCOPE_KEY;
+  /** 取全局分类体系（可能为 null） */
+  getTaxonomy(): TaxonomySchema | null {
+    return this.store?.taxonomy || null;
   }
 
-  getTaxonomy(folderPath?: string): TaxonomySchema | null {
-    if (!this.store) return null;
-    const key = this.folderKey(folderPath);
-    return this.store.taxonomies[key] || null;
-  }
-
-  async setTaxonomy(folderPath: string | undefined, taxonomy: TaxonomySchema): Promise<void> {
+  /** 写入/替换全局分类体系 */
+  async setTaxonomy(taxonomy: TaxonomySchema): Promise<void> {
     if (!this.store) await this.load();
     if (!this.store) return;
-    const key = this.folderKey(folderPath);
-    this.store.taxonomies[key] = taxonomy;
+    this.store.taxonomy = taxonomy;
     await this.save();
   }
 
-  async clearTaxonomy(folderPath?: string): Promise<void> {
+  /** 清空分类体系 */
+  async clearTaxonomy(): Promise<void> {
     if (!this.store) await this.load();
     if (!this.store) return;
-    const key = this.folderKey(folderPath);
-    delete this.store.taxonomies[key];
+    this.store.taxonomy = null;
     await this.save();
-  }
-
-  /** 列出所有已有 taxonomy 的 scope */
-  listScopes(): string[] {
-    return this.store ? Object.keys(this.store.taxonomies) : [];
   }
 
   // ---- Reset ----

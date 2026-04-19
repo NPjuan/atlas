@@ -1,5 +1,6 @@
 import { App, TFile } from 'obsidian';
 import ForceGraph, { ForceGraphInstance } from 'force-graph';
+import { forceCollide } from 'd3-force';
 
 // ============================================================
 // Tag 脑图引擎 — 基于 force-graph
@@ -45,32 +46,53 @@ interface GraphLink {
 }
 
 // ---- 配色 ----
-
-const PALETTE = {
-  bg: '#202020',
-  root: '#7f6df2',
-  tagColors: ['#a88bfa', '#7c9cf5', '#6bb8c7', '#5dab80'],
-  file: '#4e4e4e',
-  link: '#3a3a3a',
-  textNormal: '#b0b0b0',
-  textFile: '#777',
-  textHover: '#fff',
-  hoverRing: '#fff',
-  collapsedRing: (color: string) => color + '55',
-  glow: (color: string) => color + '18',
-};
-
-function getNodeColor(node: GraphNode): string {
-  if (node.type === 'root') return PALETTE.root;
-  if (node.type === 'file') return PALETTE.file;
-  const depth = node.depth || 1;
-  return PALETTE.tagColors[Math.min(depth - 1, PALETTE.tagColors.length - 1)];
+// 从 Obsidian CSS 变量读取主题色，确保亮/暗主题一致
+interface ThemePalette {
+  bg: string;
+  accent: string;           // interactive-accent
+  accentHover: string;      // interactive-accent-hover
+  textNormal: string;
+  textMuted: string;
+  textFaint: string;
+  border: string;
+  /** 生成 accent 色 alpha 变体 */
+  accentAlpha: (alpha: number) => string;
+  /** 层级衰减后的 accent 色（depth=1 最深，越深越浅） */
+  tagColor: (depth: number) => string;
 }
 
-function getNodeSize(node: GraphNode): number {
-  if (node.type === 'root') return 6;
-  if (node.type === 'file') return 2;
-  return 3.5;
+function hexToRgb(hex: string): [number, number, number] | null {
+  const m = hex.trim().match(/^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i);
+  if (!m) return null;
+  return [parseInt(m[1], 16), parseInt(m[2], 16), parseInt(m[3], 16)];
+}
+
+function readTheme(): ThemePalette {
+  const css = getComputedStyle(document.body);
+  const pick = (v: string, fallback: string) => (css.getPropertyValue(v).trim() || fallback);
+
+  const bg = pick('--background-primary', '#202020');
+  const accent = pick('--interactive-accent', '#7f6df2');
+  const accentHover = pick('--interactive-accent-hover', accent);
+  const textNormal = pick('--text-normal', '#dcddde');
+  const textMuted = pick('--text-muted', '#999');
+  const textFaint = pick('--text-faint', '#666');
+  const border = pick('--background-modifier-border', '#3a3a3a');
+
+  const rgb = hexToRgb(accent) || [127, 109, 242];
+
+  const accentAlpha = (alpha: number) =>
+    `rgba(${rgb[0]}, ${rgb[1]}, ${rgb[2]}, ${alpha})`;
+
+  // 层级色：accent 主色做饱和度 + 透明度梯度，而不是四种不同色相
+  // depth 1: 100% 主色；depth 2: 85%；depth 3+: 65%
+  const tagColor = (depth: number) => {
+    const d = Math.max(1, Math.min(depth, 4));
+    const alpha = [0, 0.95, 0.80, 0.65, 0.55][d];
+    return accentAlpha(alpha);
+  };
+
+  return { bg, accent, accentHover, textNormal, textMuted, textFaint, border, accentAlpha, tagColor };
 }
 
 // ---- Tag 树构建 ----
@@ -198,6 +220,7 @@ export class TagMindMap {
   private expanded = new Set<string>();
   private hoverNode: GraphNode | null = null;
   private statsCallback?: (stats: { nodes: number; tags: number; files: number }) => void;
+  private theme: ThemePalette = readTheme();
 
   constructor(container: HTMLElement, app: App, options: TagMindMapOptions = {}) {
     this.container = container;
@@ -208,6 +231,22 @@ export class TagMindMap {
   /** 设置统计回调 */
   onStats(cb: (stats: { nodes: number; tags: number; files: number }) => void): void {
     this.statsCallback = cb;
+  }
+
+  /** 节点颜色 */
+  private getNodeColor(node: GraphNode): string {
+    if (node.type === 'root') return this.theme.accent;
+    if (node.type === 'file') return this.theme.border;
+    return this.theme.tagColor(node.depth || 1);
+  }
+
+  /** 节点半径 */
+  private getNodeSize(node: GraphNode): number {
+    if (node.type === 'root') return 10;
+    if (node.type === 'file') return 2.5;
+    const d = node.depth || 1;
+    // 一级分类最大，逐层递减
+    return [0, 6, 5, 4][Math.min(d, 3)];
   }
 
   /** 渲染脑图 */
@@ -225,22 +264,42 @@ export class TagMindMap {
       }
     }
 
+    // 每次渲染重新读取主题（Obsidian 切主题时调用）
+    this.theme = readTheme();
+
     const data = this.buildGraphData();
 
     this.graph = ForceGraph()(this.container)
       .graphData(data)
-      .backgroundColor(PALETTE.bg)
+      .backgroundColor(this.theme.bg)
       .width(this.container.clientWidth)
       .height(this.container.clientHeight)
       .nodeId('id')
       .nodeRelSize(1)
-      .nodeVal((n: any) => getNodeSize(n))
+      .nodeVal((n: any) => this.getNodeSize(n))
       .nodeCanvasObject((node: any, ctx: CanvasRenderingContext2D, globalScale: number) => {
         this.drawNode(node, ctx, globalScale);
       })
       .nodeCanvasObjectMode(() => 'replace')
-      .linkColor(() => PALETTE.link)
-      .linkWidth(0.6)
+      .linkColor((l: any) => {
+        // hover 的节点相连的 link 用 accent 高亮
+        if (this.hoverNode) {
+          const s = typeof l.source === 'object' ? l.source : null;
+          const t = typeof l.target === 'object' ? l.target : null;
+          if (s === this.hoverNode || t === this.hoverNode) {
+            return this.theme.accentAlpha(0.5);
+          }
+        }
+        return this.theme.accentAlpha(0.15);
+      })
+      .linkWidth((l: any) => {
+        if (this.hoverNode) {
+          const s = typeof l.source === 'object' ? l.source : null;
+          const t = typeof l.target === 'object' ? l.target : null;
+          if (s === this.hoverNode || t === this.hoverNode) return 1.5;
+        }
+        return 0.8;
+      })
       .onNodeHover((node: any) => {
         this.hoverNode = node;
         this.container.style.cursor = node ? 'pointer' : 'default';
@@ -249,24 +308,51 @@ export class TagMindMap {
         this.handleClick(node);
       })
       .nodePointerAreaPaint((node: any, color: string, ctx: CanvasRenderingContext2D) => {
-        const r = Math.max(getNodeSize(node) + 4, 8);
+        const r = Math.max(this.getNodeSize(node) + 4, 10);
         ctx.beginPath();
         ctx.arc(node.x, node.y, r, 0, 2 * Math.PI);
         ctx.fillStyle = color;
         ctx.fill();
       })
-      .warmupTicks(100)
-      .cooldownTicks(200);
+      .warmupTicks(120)
+      .cooldownTicks(250);
 
-    // 力参数
+    // ---- 力参数：差异化，确保层级间距合理，叶子不飞 ----
     const charge = this.graph.d3Force('charge');
-    if (charge && (charge as any).strength) (charge as any).strength(-120);
+    if (charge && (charge as any).strength) {
+      (charge as any).strength((node: GraphNode) => {
+        if (node.type === 'root') return -800;
+        if (node.type === 'file') return -60;
+        const d = node.depth || 1;
+        if (d === 1) return -350;   // 一级分类：强斥力，把分类推开
+        if (d === 2) return -200;
+        return -120;
+      });
+    }
 
     const link = this.graph.d3Force('link');
     if (link) {
-      if ((link as any).distance) (link as any).distance(50);
-      if ((link as any).strength) (link as any).strength(0.8);
+      if ((link as any).distance) {
+        (link as any).distance((l: GraphLink) => {
+          const target = typeof l.target === 'object' ? (l.target as GraphNode) : null;
+          if (!target) return 50;
+          if (target.type === 'file') return 28;
+          const d = target.depth || 1;
+          if (d === 1) return 110;  // root → 一级：大
+          if (d === 2) return 60;
+          return 40;
+        });
+      }
+      if ((link as any).strength) (link as any).strength(0.6);
     }
+
+    // 防重叠：按节点大小做圆形碰撞
+    this.graph.d3Force('collide', forceCollide((n: any) => {
+      if (n.type === 'root') return 36;
+      if (n.type === 'file') return 16;
+      const d = n.depth || 1;
+      return [0, 28, 22, 18][Math.min(d, 3)];
+    }).strength(0.85).iterations(2));
 
     // 延迟 zoomToFit
     setTimeout(() => { if (this.graph) this.graph.zoomToFit(400, 60); }, 1500);
@@ -289,7 +375,7 @@ export class TagMindMap {
       this.graph._destructor?.();
       this.graph = null;
     }
-    this.container.innerHTML = '';
+    this.container.replaceChildren();
   }
 
   /** 展开全部 */
@@ -342,6 +428,7 @@ export class TagMindMap {
   private buildGraphData(): { nodes: GraphNode[]; links: GraphLink[] } {
     const nodes: GraphNode[] = [];
     const links: GraphLink[] = [];
+    const seenIds = new Set<string>();
 
     const walk = (src: RawTreeNode, parentId: string | null, depth: number) => {
       const hasKids = !!(
@@ -350,16 +437,20 @@ export class TagMindMap {
       );
       const isOpen = this.expanded.has(src.id);
 
-      nodes.push({
-        id: src.id,
-        name: src.name,
-        type: src.type,
-        depth,
-        fullTag: src.fullTag,
-        _src: src,
-        _hasKids: hasKids,
-        _open: isOpen,
-      });
+      // tag / root 节点去重（同一 id 不重复 push，force-graph 否则会产生幽灵节点）
+      if (!seenIds.has(src.id)) {
+        seenIds.add(src.id);
+        nodes.push({
+          id: src.id,
+          name: src.name,
+          type: src.type,
+          depth,
+          fullTag: src.fullTag,
+          _src: src,
+          _hasKids: hasKids,
+          _open: isOpen,
+        });
+      }
 
       if (parentId != null) {
         links.push({ source: parentId, target: src.id });
@@ -372,16 +463,21 @@ export class TagMindMap {
         if (src.files && src.filePaths) {
           for (let i = 0; i < src.files.length; i++) {
             const fid = 'file:' + src.filePaths[i];
-            nodes.push({
-              id: fid,
-              name: src.files[i],
-              type: 'file',
-              depth: depth + 1,
-              filePath: src.filePaths[i],
-              _src: null,
-              _hasKids: false,
-              _open: false,
-            });
+            // 笔记节点去重：同一文件即使被多个 tag 引用，也只建一个节点
+            // 但保留所有 tag→file 的连线（视觉上表现为一个笔记连到多个分类）
+            if (!seenIds.has(fid)) {
+              seenIds.add(fid);
+              nodes.push({
+                id: fid,
+                name: src.files[i],
+                type: 'file',
+                depth: depth + 1,
+                filePath: src.filePaths[i],
+                _src: null,
+                _hasKids: false,
+                _open: false,
+              });
+            }
             links.push({ source: src.id, target: fid });
           }
         }
@@ -417,38 +513,48 @@ export class TagMindMap {
     parentNode._open = true;
 
     const { nodes, links } = this.graph!.graphData() as { nodes: GraphNode[]; links: GraphLink[] };
+    const existingIds = new Set(nodes.map(n => n.id));
     const px = parentNode.x || 0;
     const py = parentNode.y || 0;
     const depth = (parentNode.depth || 0) + 1;
 
     const toAdd: GraphNode[] = [];
+    const newLinks: GraphLink[] = [];
 
     if (src.children) {
       for (const ch of src.children) {
         const hasKids = !!((ch.children && ch.children.length > 0) || (ch.files && ch.files.length > 0));
-        toAdd.push({
-          id: ch.id, name: ch.name, type: ch.type, depth,
-          fullTag: ch.fullTag, _src: ch, _hasKids: hasKids, _open: false,
-          x: px + (Math.random() - 0.5) * 40,
-          y: py + (Math.random() - 0.5) * 40,
-          vx: 0, vy: 0,
-        });
+        if (!existingIds.has(ch.id)) {
+          toAdd.push({
+            id: ch.id, name: ch.name, type: ch.type, depth,
+            fullTag: ch.fullTag, _src: ch, _hasKids: hasKids, _open: false,
+            x: px + (Math.random() - 0.5) * 40,
+            y: py + (Math.random() - 0.5) * 40,
+            vx: 0, vy: 0,
+          });
+          existingIds.add(ch.id);
+        }
+        newLinks.push({ source: parentNode.id, target: ch.id });
       }
     }
 
     if (src.files && src.filePaths) {
       for (let i = 0; i < src.files.length; i++) {
-        toAdd.push({
-          id: 'file:' + src.filePaths[i], name: src.files[i], type: 'file', depth,
-          filePath: src.filePaths[i], _src: null, _hasKids: false, _open: false,
-          x: px + (Math.random() - 0.5) * 40,
-          y: py + (Math.random() - 0.5) * 40,
-          vx: 0, vy: 0,
-        });
+        const fid = 'file:' + src.filePaths[i];
+        if (!existingIds.has(fid)) {
+          toAdd.push({
+            id: fid, name: src.files[i], type: 'file', depth,
+            filePath: src.filePaths[i], _src: null, _hasKids: false, _open: false,
+            x: px + (Math.random() - 0.5) * 40,
+            y: py + (Math.random() - 0.5) * 40,
+            vx: 0, vy: 0,
+          });
+          existingIds.add(fid);
+        }
+        newLinks.push({ source: parentNode.id, target: fid });
       }
     }
 
-    const newLinks = toAdd.map(n => ({ source: parentNode.id, target: n.id }));
     nodes.push(...toAdd);
     links.push(...newLinks);
     this.graph!.graphData({ nodes, links });
@@ -462,24 +568,34 @@ export class TagMindMap {
 
     // 构建 parent→children 索引
     const childMap: Record<string, string[]> = {};
+    // 同时统计每个节点有多少入边（多 tag 节点会有 >1 入边）
+    const inDegree: Record<string, number> = {};
     for (const link of links) {
       const sid = typeof link.source === 'object' ? (link.source as GraphNode).id : link.source;
       const tid = typeof link.target === 'object' ? (link.target as GraphNode).id : link.target;
       if (!childMap[sid]) childMap[sid] = [];
       childMap[sid].push(tid);
+      inDegree[tid] = (inDegree[tid] || 0) + 1;
     }
 
-    // BFS 收集后代
+    // BFS 收集要被"此次折叠"断开的边
+    // 关键：被共享的 file 节点（入度 >1）不应删除整个节点，仅断开来自本分支的 link
     const removeIds = new Set<string>();
-    const queue = [parentNode.id];
+    const linksToCut = new Set<string>();  // 记录 sourceId::targetId
+    const queue: string[] = [parentNode.id];
+
     while (queue.length > 0) {
       const pid = queue.shift()!;
       for (const kid of (childMap[pid] || [])) {
-        if (kid !== parentNode.id) {
-          removeIds.add(kid);
-          this.expanded.delete(kid);
-          queue.push(kid);
+        if (kid === parentNode.id) continue;
+        // 该节点被多个父节点引用 → 只切断本分支来的那条 link，节点本身保留
+        if (inDegree[kid] > 1) {
+          linksToCut.add(`${pid}::${kid}`);
+          continue;
         }
+        removeIds.add(kid);
+        this.expanded.delete(kid);
+        queue.push(kid);
       }
     }
 
@@ -487,64 +603,107 @@ export class TagMindMap {
     const newLinks = links.filter(l => {
       const sid = typeof l.source === 'object' ? (l.source as GraphNode).id : l.source;
       const tid = typeof l.target === 'object' ? (l.target as GraphNode).id : l.target;
-      return !removeIds.has(sid) && !removeIds.has(tid);
+      if (removeIds.has(sid) || removeIds.has(tid)) return false;
+      if (linksToCut.has(`${sid}::${tid}`)) return false;
+      return true;
     });
 
     this.graph!.graphData({ nodes: newNodes, links: newLinks });
   }
 
   private drawNode(node: GraphNode, ctx: CanvasRenderingContext2D, globalScale: number): void {
-    const r = getNodeSize(node);
-    const color = getNodeColor(node);
+    const r = this.getNodeSize(node);
+    const color = this.getNodeColor(node);
     const isHover = node === this.hoverNode;
+    const t = this.theme;
 
-    // 光晕
-    if (node.type !== 'file') {
+    // ---- 节点圆点 ----
+    if (node.type === 'root') {
+      // root：大实心圆 + 细边
       ctx.beginPath();
-      ctx.arc(node.x!, node.y!, r + 2, 0, 2 * Math.PI);
-      ctx.fillStyle = PALETTE.glow(color);
+      ctx.arc(node.x!, node.y!, r, 0, 2 * Math.PI);
+      ctx.fillStyle = color;
       ctx.fill();
+      // 内环装饰
+      ctx.beginPath();
+      ctx.arc(node.x!, node.y!, r - 3, 0, 2 * Math.PI);
+      ctx.strokeStyle = t.bg;
+      ctx.lineWidth = 1.5 / globalScale;
+      ctx.stroke();
+    } else if (node.type === 'file') {
+      // file：小淡灰点
+      ctx.beginPath();
+      ctx.arc(node.x!, node.y!, r, 0, 2 * Math.PI);
+      ctx.fillStyle = isHover ? t.accent : color;
+      ctx.fill();
+    } else {
+      // tag：实心圆，未展开时描边提示
+      ctx.beginPath();
+      ctx.arc(node.x!, node.y!, r, 0, 2 * Math.PI);
+      ctx.fillStyle = color;
+      ctx.fill();
+      // 未展开：外围加一个淡虚圈，表示"还有内容"
+      if (node._hasKids && !node._open) {
+        ctx.beginPath();
+        ctx.arc(node.x!, node.y!, r + 3, 0, 2 * Math.PI);
+        ctx.strokeStyle = color;
+        ctx.globalAlpha = 0.4;
+        ctx.lineWidth = 1 / globalScale;
+        ctx.setLineDash([2 / globalScale, 2 / globalScale]);
+        ctx.stroke();
+        ctx.setLineDash([]);
+        ctx.globalAlpha = 1;
+      }
     }
 
-    // 圆点
-    ctx.beginPath();
-    ctx.arc(node.x!, node.y!, r, 0, 2 * Math.PI);
-    ctx.fillStyle = color;
-    ctx.fill();
-
-    // hover 高亮
+    // hover：高亮外圈（accent 色）
     if (isHover) {
       ctx.beginPath();
-      ctx.arc(node.x!, node.y!, r + 1.5, 0, 2 * Math.PI);
-      ctx.strokeStyle = PALETTE.hoverRing;
-      ctx.lineWidth = 1.2 / globalScale;
+      ctx.arc(node.x!, node.y!, r + 2, 0, 2 * Math.PI);
+      ctx.strokeStyle = t.accent;
+      ctx.lineWidth = 2 / globalScale;
       ctx.stroke();
     }
 
-    // 未展开的可展开节点 — 虚线外圈
-    if (node._hasKids && !node._open) {
-      ctx.beginPath();
-      ctx.arc(node.x!, node.y!, r + 3.5, 0, 2 * Math.PI);
-      ctx.strokeStyle = PALETTE.collapsedRing(color);
-      ctx.lineWidth = 0.8 / globalScale;
-      ctx.setLineDash([2 / globalScale, 2 / globalScale]);
-      ctx.stroke();
-      ctx.setLineDash([]);
-    }
-
-    // 文字
+    // ---- 文字标签 ----
     const isFile = node.type === 'file';
-    const fontSize = isFile
-      ? Math.max(8, 10 / globalScale)
-      : Math.max(9, Math.min(14, 12 / globalScale));
-    const fontWeight = node.type === 'root' ? 'bold ' : '';
-    ctx.font = `${fontWeight}${fontSize}px -apple-system, BlinkMacSystemFont, 'Inter', sans-serif`;
+    const isRoot = node.type === 'root';
+
+    // 视口距离很远时，隐藏 file 和深层 tag 的文字，避免重叠噪声
+    if (!isRoot && globalScale < 0.6) {
+      if (isFile || (node.depth || 0) >= 3) return;
+    }
+
+    const fontSize = isRoot
+      ? Math.max(13, Math.min(18, 15 / globalScale))
+      : isFile
+        ? Math.max(9, 10 / globalScale)
+        : Math.max(10, Math.min(14, 12 / globalScale));
+    const fontWeight = isRoot ? '600 ' : (node.depth === 1 ? '500 ' : '');
+    // 用系统字体栈，兼容所有平台
+    ctx.font = `${fontWeight}${fontSize}px ui-sans-serif, system-ui, -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif`;
     ctx.textAlign = 'center';
     ctx.textBaseline = 'top';
-    ctx.fillStyle = isFile
-      ? PALETTE.textFile
-      : (isHover ? PALETTE.textHover : PALETTE.textNormal);
-    ctx.fillText(node.name, node.x!, node.y! + r + 3);
+
+    // 文字颜色按层级和状态
+    let textColor: string;
+    if (isHover) {
+      textColor = t.accent;
+    } else if (isRoot) {
+      textColor = t.textNormal;
+    } else if (isFile) {
+      textColor = t.textFaint;
+    } else {
+      textColor = (node.depth || 1) === 1 ? t.textNormal : t.textMuted;
+    }
+
+    // 文字背景（描边）：让字在密集区可读
+    const text = node.name;
+    ctx.lineWidth = 3 / globalScale;
+    ctx.strokeStyle = t.bg;
+    ctx.strokeText(text, node.x!, node.y! + r + 4);
+    ctx.fillStyle = textColor;
+    ctx.fillText(text, node.x!, node.y! + r + 4);
   }
 
   private updateStats(): void {

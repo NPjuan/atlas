@@ -1,13 +1,27 @@
 {
-  "name": "obsidian-mece-knowledge",
+  "name": "atlas-knowledge",
   "version": "0.1.0",
-  "description": "MECE Knowledge Mind Map for Obsidian",
+  "description": "Atlas - AI Knowledge Categorizer for Obsidian",
   "main": "main.js",
   "scripts": {
     "dev": "node esbuild.config.mjs",
     "build": "node esbuild.config.mjs production",
-    "build:debug": "node esbuild.config.mjs production --debug"
+    "build:debug": "node esbuild.config.mjs production --debug",
+    "version": "node version-bump.mjs",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
+  "license": "MIT",
+  "author": "ekkopan",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/NPjuan/obsidian-mece.git"
+  },
+  "bugs": {
+    "url": "https://github.com/NPjuan/obsidian-mece/issues"
+  },
+  "homepage": "https://github.com/NPjuan/obsidian-mece#readme",
+  "keywords": ["obsidian", "obsidian-plugin", "ai", "taxonomy", "knowledge-management"],
   "devDependencies": {
     "@types/d3": "^7.4.3",
     "@types/node": "^22.0.0",
@@ -16,7 +30,8 @@
     "builtin-modules": "^4.0.0",
     "esbuild": "^0.24.0",
     "obsidian": "latest",
-    "typescript": "^5.6.0"
+    "typescript": "^5.6.0",
+    "vitest": "^4.1.4"
   },
   "dependencies": {
     "d3": "^7.9.0",
