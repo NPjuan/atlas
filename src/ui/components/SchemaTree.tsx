@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect, useCallback } from 'react';
 import type { TaxonomyNode, TaxonomySchema } from '../../types';
+import { t, useLocale } from '../../i18n';
 
 // ============================================================
 // Schema 树形编辑器 — 核心 React 组件
@@ -168,22 +169,22 @@ function TreeNodeRow({
         {/* 操作按钮 */}
         {hover && (
           <div className="mece-schema-tree-ops" onClick={(e) => e.stopPropagation()}>
-            {!isFirst && <button className="mece-schema-tree-op" onClick={() => onMoveUp(node.id)} title="上移">↑</button>}
-            {!isLast && <button className="mece-schema-tree-op" onClick={() => onMoveDown(node.id)} title="下移">↓</button>}
-            <button className="mece-schema-tree-op" onClick={() => { setEditing(true); setEditValue(node.name); }} title="重命名">✏</button>
+            {!isFirst && <button className="mece-schema-tree-op" onClick={() => onMoveUp(node.id)} title={t('schema.tipMoveUp')}>↑</button>}
+            {!isLast && <button className="mece-schema-tree-op" onClick={() => onMoveDown(node.id)} title={t('schema.tipMoveDown')}>↓</button>}
+            <button className="mece-schema-tree-op" onClick={() => { setEditing(true); setEditValue(node.name); }} title={t('schema.tipRename')}>✏</button>
             {canAddChild && (
               <button
                 className="mece-schema-tree-op"
                 style={{ color: 'var(--text-success, #4caf50)' }}
                 onClick={() => { onAddChild(node.id); setExpanded(true); }}
-                title={`添加子分类（${depth + 1}/${maxDepth}）`}
+                title={t('schema.tipAddChild', { depth: depth + 1, max: maxDepth })}
               >+</button>
             )}
             <button
               className="mece-schema-tree-op"
               style={{ color: 'var(--text-error, #e55)' }}
               onClick={() => onDelete(node.id)}
-              title="删除"
+              title={t('schema.tipDelete')}
             >×</button>
           </div>
         )}
@@ -217,6 +218,7 @@ function TreeNodeRow({
 // ---- 主组件 ----
 
 export function SchemaTree({ nodes, maxDepth, noteCountMap, onChange }: SchemaTreeProps) {
+  useLocale();
   const emit = useCallback((newNodes: TaxonomyNode[]) => {
     onChange(updatePaths(newNodes));
   }, [onChange]);
@@ -230,7 +232,7 @@ export function SchemaTree({ nodes, maxDepth, noteCountMap, onChange }: SchemaTr
   }, [nodes, emit]);
 
   const handleAddChild = useCallback((parentId: string) => {
-    const child: TaxonomyNode = { id: genId(), name: '新分类', fullPath: '', children: [] };
+    const child: TaxonomyNode = { id: genId(), name: t('schema.newCategory'), fullPath: '', children: [] };
     emit(insertChild(nodes, parentId, child));
   }, [nodes, emit]);
 
@@ -243,7 +245,7 @@ export function SchemaTree({ nodes, maxDepth, noteCountMap, onChange }: SchemaTr
   }, [nodes, emit]);
 
   const handleAddRoot = useCallback(() => {
-    const child: TaxonomyNode = { id: genId(), name: '新分类', fullPath: '', children: [] };
+    const child: TaxonomyNode = { id: genId(), name: t('schema.newCategory'), fullPath: '', children: [] };
     emit([...nodes, child]);
   }, [nodes, emit]);
 
@@ -253,14 +255,14 @@ export function SchemaTree({ nodes, maxDepth, noteCountMap, onChange }: SchemaTr
     <div className="mece-schema-tree">
       {/* 统计 */}
       <div className="mece-schema-tree-stats">
-        {nodes.length} 个一级分类 · {totalNodes} 个节点 · 最大 {maxDepth} 层
+        {t('schema.treeStats', { top: nodes.length, total: totalNodes, max: maxDepth })}
       </div>
 
       {/* 树 */}
       <div className="mece-schema-tree-body">
         {nodes.length === 0 ? (
           <div className="mece-schema-tree-empty">
-            暂无分类，点击下方「添加一级分类」开始
+            {t('schema.emptyHint')}
           </div>
         ) : (
           nodes.map((node, i) => (
@@ -284,7 +286,7 @@ export function SchemaTree({ nodes, maxDepth, noteCountMap, onChange }: SchemaTr
 
       {/* 添加按钮 */}
       <div className="mece-schema-tree-add-root">
-        <button onClick={handleAddRoot}>+ 添加一级分类</button>
+        <button onClick={handleAddRoot}>{t('schema.addRootBtn')}</button>
       </div>
     </div>
   );

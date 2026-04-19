@@ -13,6 +13,7 @@ import { FileMoveReviewModal } from './ui/components/FileMoveReviewModal';
 import { ProgressModal } from './ui/progress-modal';
 import { planFileMoves, collectFoldersToCreate, type FileMoveAction } from './core/file-organizer';
 import { collectAllFullPaths } from './core/taxonomy-scope';
+import { t, setLocale, resolveLocale, getLocale } from './i18n';
 
 // ---- 文件夹选择器 ----
 
@@ -38,12 +39,12 @@ class FolderSuggestModal extends FuzzySuggestModal<TFolder | null> {
     others.sort(byPath);
     this.folders = [null, ...marked, ...others];
     this.onChoose = onChoose;
-    this.setPlaceholder('选择文件夹范围');
+    this.setPlaceholder(t('folder.placeholder'));
   }
 
   getItems(): (TFolder | null)[] { return this.folders; }
   getItemText(item: TFolder | null): string {
-    return item ? item.path : '📁 整个 Vault';
+    return item ? item.path : t('folder.wholeVault');
   }
   onChooseItem(item: TFolder | null): void { this.onChoose(item); }
 }
@@ -65,24 +66,27 @@ export default class MECEPlugin extends Plugin {
     const store = await this.storeManager.load();
     this.settings = store.settings;
 
+    // i18n：按 settings.language 初始化 locale
+    setLocale(resolveLocale(this.settings.language));
+
     this.registerView(TAG_MAP_VIEW_TYPE, (leaf) => new TagMapView(leaf, this));
 
-    this.addRibbonIcon('folder-tree', '打开 Atlas 知识整理', () => this.activateTagMapView());
+    this.addRibbonIcon('wand-2', t('ribbon.openPanel'), () => this.activateTagMapView());
 
     // ---- 命令 ----
 
-    this.addCommand({ id: 'open-tag-map', name: '打开知识整理面板', callback: () => this.activateTagMapView() });
-    this.addCommand({ id: 'generate-schema', name: '生成分类体系', callback: () => this.generateSchema() });
-    this.addCommand({ id: 'edit-schema', name: '编辑分类体系', callback: () => this.editSchema() });
-    this.addCommand({ id: 'ai-tag-files', name: 'AI 归类（选择文件夹）', callback: () => this.chooseFolderThenTag() });
+    this.addCommand({ id: 'open-tag-map', name: t('command.openPanel'), callback: () => this.activateTagMapView() });
+    this.addCommand({ id: 'generate-schema', name: t('command.generateSchema'), callback: () => this.generateSchema() });
+    this.addCommand({ id: 'edit-schema', name: t('command.editSchema'), callback: () => this.editSchema() });
+    this.addCommand({ id: 'ai-tag-files', name: t('command.aiTagFiles'), callback: () => this.chooseFolderThenTag() });
     this.addCommand({
       id: 'reset-store',
-      name: '重置所有数据',
+      name: t('command.resetStore'),
       callback: async () => {
-        const confirmed = await this.showConfirmDialog('重置所有数据', '将清空分类体系和所有处理记录。\n\n已写入笔记的 tag 不会被删除。', '重置', '取消');
+        const confirmed = await this.showConfirmDialog(t('modal.confirmResetTitle'), t('modal.confirmResetDesc'), t('common.reset'), t('common.cancel'));
         if (confirmed) {
           await this.storeManager.reset();
-          new Notice('✅ 数据已重置');
+          new Notice(t('notice.dataReset'));
           this.refreshTagMapView();
         }
       },
@@ -107,7 +111,7 @@ export default class MECEPlugin extends Plugin {
       this.app.workspace.on('file-menu', (menu, file) => {
         if (file instanceof TFile && file.extension === 'md') {
           menu.addItem((item) => {
-            item.setTitle('Atlas：AI 归类').setIcon('tags').onClick(async () => {
+            item.setTitle(t('menu.aiTag')).setIcon('tags').onClick(async () => {
               await this.tagSingleFile(file);
             });
           });
@@ -153,12 +157,12 @@ export default class MECEPlugin extends Plugin {
   private checkAIConfig(): boolean {
     const { aiProvider, apiKey, ollamaHost } = this.settings;
     if (aiProvider === 'ollama') {
-      if (!ollamaHost?.trim()) { new Notice('⚠️ 请先配置 Ollama 地址', 8000); return false; }
+      if (!ollamaHost?.trim()) { new Notice(t('notice.apiKeyMissing', { provider: 'Ollama' }), 8000); return false; }
       return true;
     }
     if (!apiKey?.trim()) {
       const names: Record<string, string> = { openai: 'OpenAI', claude: 'Claude', deepseek: 'DeepSeek' };
-      new Notice(`⚠️ 请先配置 ${names[aiProvider] || aiProvider} 的 API Key`, 8000);
+      new Notice(t('notice.apiKeyMissing', { provider: names[aiProvider] || aiProvider }), 8000);
       return false;
     }
     return true;
@@ -167,7 +171,7 @@ export default class MECEPlugin extends Plugin {
   // ---- Schema 生成 ----
 
   async generateSchema(useCurrentFolder = false): Promise<void> {
-    if (this.isProcessing) { new Notice('正在处理中...'); return; }
+    if (this.isProcessing) { new Notice(t('notice.processing')); return; }
     if (!this.checkAIConfig()) return;
 
     // 从 UI 触发时（useCurrentFolder=true），直接用当前选定的范围
@@ -194,12 +198,12 @@ export default class MECEPlugin extends Plugin {
 
     try {
       const files = this.getTargetFiles();
-      if (files.length === 0) { new Notice('未找到 .md 文件'); modal.close(); this.isProcessing = false; return; }
+      if (files.length === 0) { new Notice(t('notice.noFilesFound')); modal.close(); this.isProcessing = false; return; }
 
       const provider = createAIProvider(this.settings);
 
       // Phase 1: 生成分类体系
-      const rootName = this.targetFolder ? (this.targetFolder.split('/').pop() || this.targetFolder) : '全部';
+      const rootName = this.targetFolder ? (this.targetFolder.split('/').pop() || this.targetFolder) : t('empty.wholeVault');
       const taxonomy = await generateTaxonomySchema(this.app, files, provider, this.settings, {
         onProgress: (p) => modal.update(p),
         isCancelled: () => modal.isCancelled(),
@@ -223,7 +227,7 @@ export default class MECEPlugin extends Plugin {
       this.isProcessing = false;
 
       if (patchList.stats.filesWithChanges === 0 && patchList.suggestedCategories.length === 0) {
-        new Notice('所有笔记分类已是最新');
+        new Notice(t('notice.allUpToDate'));
         this.refreshTagMapView();
         return;
       }
@@ -237,7 +241,7 @@ export default class MECEPlugin extends Plugin {
           if (acceptedCategories.length > 0) {
             await this.addCategoriesToSchema(taxonomy, acceptedCategories);
           }
-          new Notice(`${result.applied} 篇笔记已重新归类` + (result.failed > 0 ? `，${result.failed} 篇失败` : ''));
+          new Notice(`${t('notice.tagsWritten', { count: result.applied })}${result.failed > 0 ? t('notice.tagsFailed', { count: result.failed }) : ''}`);
           this.refreshTagMapView();
           this.triggerAutoOrganize(this.targetFolder);
         }).open();
@@ -246,7 +250,7 @@ export default class MECEPlugin extends Plugin {
         const applyStore = await this.storeManager.load();
         const result = await applyPatches(this.app, patchList.patches, applyStore);
         await this.storeManager.save();
-        new Notice(`完成：${result.applied} 篇笔记已分类` + (result.failed > 0 ? `，${result.failed} 篇失败` : ''));
+        new Notice(`${t('notice.tagsWritten', { count: result.applied })}${result.failed > 0 ? t('notice.tagsFailed', { count: result.failed }) : ''}`);
         this.refreshTagMapView();
         this.triggerAutoOrganize(this.targetFolder);
       }
@@ -254,7 +258,7 @@ export default class MECEPlugin extends Plugin {
     } catch (e) {
       modal.close();
       this.isProcessing = false;
-      new Notice(`处理失败：${this.friendlyErrorMessage(e)}`, 10000);
+      new Notice(t('notice.processError', { error: this.friendlyErrorMessage(e) }), 10000);
       console.error('Atlas error:', e);
     }
   }
@@ -264,7 +268,7 @@ export default class MECEPlugin extends Plugin {
   async editSchema(): Promise<void> {
     const taxonomy = this.storeManager.getTaxonomy();
     if (!taxonomy) {
-      new Notice('此范围尚未生成分类体系，请先执行「生成分类体系」');
+      new Notice(t('notice.noSchemaToEdit'));
       return;
     }
 
@@ -275,7 +279,7 @@ export default class MECEPlugin extends Plugin {
       noteCountMap,
       async (confirmed) => {
         await this.storeManager.setTaxonomy(confirmed);
-        new Notice('分类体系已更新');
+        new Notice(t('notice.schemaUpdated'));
         this.refreshTagMapView();
       },
       () => this.doGenerateSchema(),
@@ -308,12 +312,12 @@ export default class MECEPlugin extends Plugin {
   }
 
   async startTagging(): Promise<void> {
-    if (this.isProcessing) { new Notice('正在处理中...'); return; }
+    if (this.isProcessing) { new Notice(t('notice.processing')); return; }
     if (!this.checkAIConfig()) return;
 
     const store = await this.storeManager.load();
     const files = this.getTargetFiles();
-    if (files.length === 0) { new Notice('未找到可处理的 .md 文件'); return; }
+    if (files.length === 0) { new Notice(t('notice.noFilesFound')); return; }
 
     const taxonomy = this.storeManager.getTaxonomy();
     let alreadyTagged = 0, newOrChanged = 0;
@@ -321,17 +325,23 @@ export default class MECEPlugin extends Plugin {
       const content = await this.app.vault.cachedRead(file);
       const hash = this.simpleHash(content);
       const existing = store.processedFiles[file.path];
-      if (existing && existing.hash === hash) alreadyTagged++;
+      // 当前 frontmatter 真的有 tag 才算"已分类"；否则视作未归类（和 tagger.ts 的跳过逻辑保持一致）
+      const fm = this.app.metadataCache.getFileCache(file)?.frontmatter;
+      const rawTags = fm?.tags;
+      const hasTags = Array.isArray(rawTags)
+        ? rawTags.some((t: unknown) => typeof t === 'string' && !!t.trim())
+        : typeof rawTags === 'string' && !!rawTags.trim();
+      if (existing && existing.hash === hash && hasTags) alreadyTagged++;
       else newOrChanged++;
     }
 
     if (alreadyTagged > 0 && newOrChanged === 0) {
-      const confirmed = await this.showConfirmDialog('重新 AI 归类', `${alreadyTagged} 个文件已归类且无变化。\n\n重新分析？`, '重新归类', '取消');
+      const confirmed = await this.showConfirmDialog(t('modal.reorganizeTitle'), t('notice.confirmReorganize', { count: alreadyTagged }), t('modal.reorganizeConfirm'), t('common.cancel'));
       if (!confirmed) return;
       for (const file of files) delete store.processedFiles[file.path];
       await this.storeManager.save();
     } else if (alreadyTagged > 0 && newOrChanged > 0) {
-      const confirmed = await this.showConfirmDialog('部分文件已归类', `${newOrChanged} 个新文件 + ${alreadyTagged} 个已处理。\n\n全部重新处理？`, `全部（${files.length}）`, `仅新文件（${newOrChanged}）`);
+      const confirmed = await this.showConfirmDialog(t('notice.partialTaggedTitle'), t('notice.partialTaggedDesc', { newCount: newOrChanged, oldCount: alreadyTagged }), t('notice.partialTaggedConfirmAll', { count: files.length }), t('notice.partialTaggedConfirmNewOnly', { count: newOrChanged }));
       if (confirmed) {
         for (const file of files) {
           const content = await this.app.vault.cachedRead(file);
@@ -349,7 +359,7 @@ export default class MECEPlugin extends Plugin {
     try {
       const provider = createAIProvider(this.settings);
       modal.update({ phase: 'scanning', current: 0, total: 0, message: '扫描文件...' });
-      new Notice(`📄 ${files.length} 个文件，正在分析...`);
+      new Notice(t('notice.analyzing', { count: files.length }));
 
       const patchList = await generatePatches(this.app, files, store, provider, this.settings, taxonomy, {
         onProgress: (p) => modal.update(p),
@@ -360,7 +370,7 @@ export default class MECEPlugin extends Plugin {
       this.isProcessing = false;
 
       if (patchList.stats.filesWithChanges === 0 && patchList.suggestedCategories.length === 0) {
-        new Notice('✅ 所有文件分类已是最新');
+        new Notice(t('notice.allCategorizedOk'));
         for (const patch of patchList.patches) {
           store.processedFiles[patch.filePath] = { hash: patch.hash, taggedAt: new Date().toISOString(), tagCount: patch.oldTags.length };
         }
@@ -378,7 +388,7 @@ export default class MECEPlugin extends Plugin {
           await this.addCategoriesToSchema(taxonomy, acceptedCategories);
         }
 
-        new Notice(`✅ ${result.applied} 个文件写入成功` + (result.failed > 0 ? `，${result.failed} 个失败` : ''));
+        new Notice(`${t('notice.tagsWritten', { count: result.applied })}${result.failed > 0 ? t('notice.tagsFailed', { count: result.failed }) : ''}`);
         this.refreshTagMapView();
         this.triggerAutoOrganize(this.targetFolder);
       }).open();
@@ -386,7 +396,7 @@ export default class MECEPlugin extends Plugin {
     } catch (e) {
       modal.close();
       this.isProcessing = false;
-      new Notice(`❌ AI 归类出错：${this.friendlyErrorMessage(e)}`, 10000);
+      new Notice(t('notice.analysisError', { error: this.friendlyErrorMessage(e) }), 10000);
     }
   }
 
@@ -398,7 +408,7 @@ export default class MECEPlugin extends Plugin {
     if (!this.checkAIConfig()) return;
     const store = this.storeManager.get();
     if (!store || !store.taxonomy) {
-      new Notice('还没有分类体系，请先生成');
+      new Notice(t('notice.noSchema'));
       return;
     }
 
@@ -410,7 +420,7 @@ export default class MECEPlugin extends Plugin {
         return f.path.startsWith(prefix);
       });
       if (files.length === 0) {
-        new Notice('所选范围内没有笔记');
+        new Notice(t('notice.noFilesInScope'));
         return;
       }
       this.tagFiles(files, intensity);
@@ -425,9 +435,9 @@ export default class MECEPlugin extends Plugin {
    * folderFilter 只决定"给哪些笔记归类"，不决定"用哪个 schema"。
    */
   async tagFiles(files: TFile[], intensity?: import('./ai/prompts').ReorganizeIntensity): Promise<void> {
-    if (this.isProcessing) { new Notice('正在处理中...'); return; }
+    if (this.isProcessing) { new Notice(t('notice.processing')); return; }
     if (!this.checkAIConfig()) return;
-    if (files.length === 0) { new Notice('没有需要处理的笔记'); return; }
+    if (files.length === 0) { new Notice(t('notice.noFilesToProcess')); return; }
 
     // 未显式传 intensity 时，使用设置里的默认值
     const effectiveIntensity: import('./ai/prompts').ReorganizeIntensity =
@@ -438,7 +448,7 @@ export default class MECEPlugin extends Plugin {
     const store = await this.storeManager.load();
     const taxonomy = this.storeManager.getTaxonomy();
     if (!taxonomy) {
-      new Notice('请先生成分类体系再做 AI 归类');
+      new Notice(t('notice.configureAIFirst'));
       return;
     }
 
@@ -471,7 +481,7 @@ export default class MECEPlugin extends Plugin {
 
       const withChanges = patchList.patches.filter(p => p.hasChanges);
       if (withChanges.length === 0 && patchList.suggestedCategories.length === 0) {
-        new Notice('AI 未能为这些笔记找到合适的分类');
+        new Notice(t('notice.aiFailedToFindCategory'));
         return;
       }
 
@@ -484,8 +494,7 @@ export default class MECEPlugin extends Plugin {
           await this.addCategoriesToSchema(taxonomy, acceptedCategories);
         }
 
-        new Notice(`✅ ${result.applied} 篇笔记已归类`
-          + (result.failed > 0 ? `，${result.failed} 篇失败` : ''));
+        new Notice(`${t('notice.tagsWritten', { count: result.applied })}${result.failed > 0 ? t('notice.tagsFailed', { count: result.failed }) : ''}`);
         this.refreshTagMapView();
         // 分类 = 目录：归类写入后自动触发文件迁移（可在设置里关）
         this.triggerAutoOrganize(null);
@@ -493,7 +502,7 @@ export default class MECEPlugin extends Plugin {
     } catch (e) {
       modal.close();
       this.isProcessing = false;
-      new Notice(`❌ AI 归类出错：${this.friendlyErrorMessage(e)}`, 10000);
+      new Notice(t('notice.analysisError', { error: this.friendlyErrorMessage(e) }), 10000);
     }
   }
 
@@ -507,7 +516,7 @@ export default class MECEPlugin extends Plugin {
    * @param scopeFolderPath 只处理这个文件夹下的笔记；null = 整个 vault
    */
   async organizeFilesByCategory(scopeFolderPath?: string | null): Promise<void> {
-    if (this.isProcessing) { new Notice('正在处理中...'); return; }
+    if (this.isProcessing) { new Notice(t('notice.processing')); return; }
 
     // 1. 收集 scope 下的笔记和它们的 tag
     const allFiles = this.app.vault.getMarkdownFiles();
@@ -535,7 +544,7 @@ export default class MECEPlugin extends Plugin {
 
     const needsMove = actions.filter(a => !a.alreadyInPlace);
     if (needsMove.length === 0) {
-      new Notice('所有笔记已经在正确的分类文件夹下');
+      new Notice(t('notice.allInPlace'));
       return;
     }
 
@@ -596,9 +605,9 @@ export default class MECEPlugin extends Plugin {
       }
 
       if (failed === 0) {
-        new Notice(`✅ ${moved} 个笔记已迁移到对应分类文件夹`);
+        new Notice(t('notice.filesMovedOk', { moved }));
       } else {
-        new Notice(`⚠️ ${moved} 成功，${failed} 失败。详见控制台`, 8000);
+        new Notice(`${t('notice.filesMovedOk', { moved })}${t('notice.filesMovedFailed', { failed })}`, 8000);
         console.warn('Atlas: 部分迁移失败\n' + errors.join('\n'));
       }
       this.refreshTagMapView();
@@ -729,7 +738,7 @@ export default class MECEPlugin extends Plugin {
   }
 
   async tagSingleFile(file: TFile): Promise<void> {
-    if (this.isProcessing) { new Notice('正在处理中...'); return; }
+    if (this.isProcessing) { new Notice(t('notice.processing')); return; }
     if (!this.checkAIConfig()) return;
 
     this.isProcessing = true;
@@ -738,23 +747,23 @@ export default class MECEPlugin extends Plugin {
       const provider = createAIProvider(this.settings);
       const taxonomy = this.storeManager.getTaxonomy();
 
-      new Notice(`🏷️ 正在分析 ${file.name}...`);
+      new Notice(t('notice.aiAnalyzing', { name: file.name }));
       const patchList = await generatePatches(this.app, [file], store, provider, this.settings, taxonomy);
       this.isProcessing = false;
 
-      if (patchList.stats.filesWithChanges === 0) { new Notice(`✅ ${file.name} 无需变更`); return; }
+      if (patchList.stats.filesWithChanges === 0) { new Notice(t('notice.noChangesForFile', { name: file.name })); return; }
 
       new PatchReviewModal(this.app, patchList, async (patches, cats) => {
         const result = await applyPatches(this.app, patches, store);
         await this.storeManager.save();
         if (cats.length > 0 && taxonomy) await this.addCategoriesToSchema(taxonomy, cats);
-        new Notice(`✅ ${file.name} 已重新归类`);
+        new Notice(t('notice.fileRecategorized', { name: file.name }));
         this.refreshTagMapView();
         this.triggerAutoOrganize(this.targetFolder);
       }).open();
     } catch (e) {
       this.isProcessing = false;
-      new Notice(`❌ 出错：${this.friendlyErrorMessage(e)}`, 10000);
+      new Notice(t('notice.errorGeneric', { error: this.friendlyErrorMessage(e) }), 10000);
     }
   }
 
@@ -871,9 +880,11 @@ export default class MECEPlugin extends Plugin {
     return raw;
   }
 
-  private showConfirmDialog(title: string, message: string, confirmText = '确认', cancelText = '取消'): Promise<boolean> {
+  private showConfirmDialog(title: string, message: string, confirmText?: string, cancelText?: string): Promise<boolean> {
+    const confirm = confirmText ?? t('common.confirm');
+    const cancel = cancelText ?? t('common.cancel');
     return new Promise((resolve) => {
-      const modal = new ConfirmModal(this.app, title, message, confirmText, cancelText, resolve);
+      const modal = new ConfirmModal(this.app, title, message, confirm, cancel, resolve);
       modal.open();
     });
   }

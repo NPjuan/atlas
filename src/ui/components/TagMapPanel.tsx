@@ -4,13 +4,14 @@ import type MECEPlugin from '../../main';
 import type { TaxonomyNode, AIProviderType } from '../../types';
 import { getApiKey, setModel, switchProvider } from '../../types';
 import { findScopeNode, buildScopeViewSchema, replaceScopeNode } from '../../core/taxonomy-scope';
+import { t, useLocale } from '../../i18n';
 import { ForceGraphView } from './ForceGraphView';
 import { EmptyState } from './EmptyState';
 import { UnifiedOrganizer } from './UnifiedOrganizer';
 
 // ============================================================
 // TagMapPanel — Tag 面板主容器
-// 整理笔记（默认视图） + 脑图浏览（切换视图）
+// 整理（默认视图：分类树 + 拖拽归类） + 探索（切换视图：脑图可视化）
 //
 // 架构：全局只有一份 taxonomy，folderFilter 只决定"展示/操作哪些笔记"
 // ============================================================
@@ -24,6 +25,7 @@ interface TagMapPanelProps {
 type ViewMode = 'organize' | 'graph';
 
 export function TagMapPanel({ plugin, refreshKey = 0 }: TagMapPanelProps) {
+  useLocale();  // 订阅语言变化，切换时强制重渲染
   const [stats, setStats] = useState({ nodes: 0, tags: 0, files: 0 });
   const [view, setView] = useState<ViewMode>('organize');
   const [folderFilter, setFolderFilter] = useState<string | undefined>(plugin.targetFolder);
@@ -92,7 +94,7 @@ export function TagMapPanel({ plugin, refreshKey = 0 }: TagMapPanelProps) {
     };
     return map[id] || id;
   };
-  const providerLabel = `${providerName} · ${settings.model ? modelFriendlyName(settings.model) : '默认模型'}`;
+  const providerLabel = `${providerName} · ${settings.model ? modelFriendlyName(settings.model) : t('panel.openDefaultModel')}`;
 
   const openSettings = useCallback(() => {
     (app as any).setting?.open();
@@ -136,7 +138,7 @@ export function TagMapPanel({ plugin, refreshKey = 0 }: TagMapPanelProps) {
     const models = modelsByProvider[curProvider] || [];
 
     menu.addItem((item) => {
-      item.setTitle(`模型（${providerNames[curProvider] || curProvider}）`).setIsLabel(true);
+      item.setTitle(t('panel.modelMenuTitle', { provider: providerNames[curProvider] || curProvider })).setIsLabel(true);
     });
     for (const m of models) {
       menu.addItem((item) => {
@@ -150,13 +152,13 @@ export function TagMapPanel({ plugin, refreshKey = 0 }: TagMapPanelProps) {
     menu.addSeparator();
 
     // ---- 切换 Provider（未配 key 的 provider 置灰，点击跳转到设置）----
-    menu.addItem((item) => item.setTitle('切换 AI 提供商').setIsLabel(true));
+    menu.addItem((item) => item.setTitle(t('panel.switchProvider')).setIsLabel(true));
     const providerKeys: AIProviderType[] = ['claude', 'openai', 'deepseek', 'ollama'];
     for (const p of providerKeys) {
       const needsKey = p !== 'ollama';
       const hasKey = !needsKey || !!getApiKey(plugin.settings, p);
       const label = providerNames[p] || p;
-      const title = hasKey ? label : `${label} · 未配置 Key`;
+      const title = hasKey ? label : t('panel.providerNoKey', { name: label });
       menu.addItem((item) => {
         item.setTitle(title).setChecked(p === curProvider);
         if (!hasKey) item.setDisabled(true);
@@ -171,7 +173,7 @@ export function TagMapPanel({ plugin, refreshKey = 0 }: TagMapPanelProps) {
 
     menu.addSeparator();
     menu.addItem((item) => {
-      item.setTitle('打开设置…').setIcon('settings').onClick(() => openSettings());
+      item.setTitle(t('panel.openSettingsMenu')).setIcon('settings').onClick(() => openSettings());
     });
 
     menu.showAtMouseEvent(evt.nativeEvent);
@@ -246,21 +248,15 @@ export function TagMapPanel({ plugin, refreshKey = 0 }: TagMapPanelProps) {
           onOpenSettings={openSettings}
         />
         <div className="mece-empty-state">
-          <h3>此文件夹没有对应分类</h3>
-          <p>
-            全局分类体系里没有 fullPath 等于
-            <code style={{ margin: '0 4px' }}>{folderFilter}</code>
-            的一级节点。
-          </p>
-          <p style={{ opacity: 0.75 }}>
-            切回「整个 Vault」查看完整分类，或选择其它范围。
-          </p>
+          <h3>{t('empty.noScopeTitle')}</h3>
+          <p>{t('empty.noScopeDesc', { path: folderFilter! })}</p>
+          <p style={{ opacity: 0.75 }}>{t('empty.noScopeHint')}</p>
           <div className="mece-empty-footer">
             <button className="mece-btn mece-btn-primary" onClick={() => handleFolderChange(undefined)}>
-              切回整个 Vault
+              {t('empty.backToVault')}
             </button>
             <button className="mece-btn mece-btn-subtle" onClick={chooseFolder} style={{ marginLeft: 8 }}>
-              换一个范围
+              {t('empty.chooseFolder')}
             </button>
           </div>
         </div>
@@ -290,7 +286,7 @@ export function TagMapPanel({ plugin, refreshKey = 0 }: TagMapPanelProps) {
           isAIConfigured={isAIConfigured}
           hasSchema={hasSchema}
           providerLabel={providerLabel}
-          folderLabel={folderFilter ? folderFilter.split('/').pop() || folderFilter : '整个 Vault'}
+          folderLabel={folderFilter ? folderFilter.split('/').pop() || folderFilter : t('empty.wholeVault')}
           isEmptyFolder={isEmptyFolder}
           onOpenSettings={openSettings}
           onGenerateSchema={() => plugin.generateSchema(true)}
@@ -316,13 +312,13 @@ export function TagMapPanel({ plugin, refreshKey = 0 }: TagMapPanelProps) {
           className={`mece-view-tab ${view === 'organize' ? 'mece-view-tab-active' : ''}`}
           onClick={() => setView('organize')}
         >
-          大纲
+          {t('panel.viewOrganize')}
         </button>
         <button
           className={`mece-view-tab ${view === 'graph' ? 'mece-view-tab-active' : ''}`}
           onClick={() => setView('graph')}
         >
-          脑图
+          {t('panel.viewGraph')}
         </button>
       </div>
 
@@ -404,14 +400,14 @@ function TopBar({ isAIConfigured, providerLabel, onPickProvider, onAIReorganize,
         <button
           className="mece-ai-status-pill"
           onClick={onPickProvider}
-          aria-label="切换模型或 AI 提供商"
+          aria-label={t('panel.switchModelOrProvider')}
         >
           <span className="mece-ai-status-pill-text">{providerLabel}</span>
           <IconHost icon="chevron-down" className="mece-ai-status-pill-caret" />
         </button>
       ) : (
         <span className="mece-ai-status-text">
-          {isAIConfigured ? providerLabel : '未配置 AI'}
+          {isAIConfigured ? providerLabel : t('panel.notConfiguredAI')}
         </span>
       )}
       <div className="mece-ai-status-actions">
@@ -419,7 +415,7 @@ function TopBar({ isAIConfigured, providerLabel, onPickProvider, onAIReorganize,
           <button
             className="mece-ai-status-action"
             onClick={onAIReorganize}
-            aria-label="AI 智能归类：按当前分类体系分析所有笔记的归属"
+            aria-label={t('panel.aiReorganize')}
           >
             <IconHost icon="wand-sparkles" />
           </button>
@@ -428,12 +424,12 @@ function TopBar({ isAIConfigured, providerLabel, onPickProvider, onAIReorganize,
           <button
             className="mece-ai-status-action"
             onClick={onOrganizeFiles}
-            aria-label="按分类整理文件夹：将笔记移动到以 tag 命名的文件夹下"
+            aria-label={t('panel.organizeFiles')}
           >
             <IconHost icon="folder-tree" />
           </button>
         )}
-        <button className="mece-ai-status-action" onClick={onOpenSettings} aria-label="插件设置">
+        <button className="mece-ai-status-action" onClick={onOpenSettings} aria-label={t('panel.openSettings')}>
           <IconHost icon="settings" />
         </button>
       </div>

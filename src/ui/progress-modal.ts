@@ -1,12 +1,16 @@
 import { App, Modal } from 'obsidian';
 import { ScanProgress } from '../types';
+import { t } from '../i18n';
 
-const PHASE_LABELS: Record<string, string> = {
-  scanning: '扫描文件',
-  'schema-gen': '生成分类体系',
-  tagging: '归类中',
-  writing: '写入分类',
-};
+function phaseLabel(phase: string): string {
+  switch (phase) {
+    case 'scanning':    return t('progress.phaseScanning');
+    case 'schema-gen':  return t('progress.phaseSchemaGen');
+    case 'tagging':     return t('progress.phaseTagging');
+    case 'writing':     return t('progress.phaseWriting');
+    default:            return phase;
+  }
+}
 
 export class ProgressModal extends Modal {
   private progressEl!: HTMLElement;
@@ -31,10 +35,10 @@ export class ProgressModal extends Modal {
     contentEl.empty();
     contentEl.addClass('mece-progress-modal');
 
-    contentEl.createEl('h3', { text: 'Atlas 知识处理' });
+    contentEl.createEl('h3', { text: t('modal.progressTitle') });
 
     this.fileEl = contentEl.createDiv({ cls: 'mece-progress-file' });
-    this.fileEl.setText('准备中...');
+    this.fileEl.setText(t('progress.preparing'));
 
     this.barContainerEl = contentEl.createDiv({ cls: 'mece-progress-bar-container' });
     this.barEl = this.barContainerEl.createDiv({ cls: 'mece-progress-bar' });
@@ -49,7 +53,7 @@ export class ProgressModal extends Modal {
     this.elapsedEl.style.display = 'none';
 
     const btnContainer = contentEl.createDiv({ cls: 'mece-progress-buttons' });
-    const cancelBtn = btnContainer.createEl('button', { text: '取消' });
+    const cancelBtn = btnContainer.createEl('button', { text: t('modal.cancel') });
     cancelBtn.addEventListener('click', () => {
       this.cancelled = true;
       this.onCancel?.();
@@ -62,8 +66,10 @@ export class ProgressModal extends Modal {
   update(progress: ScanProgress): void {
     if (this.cancelled) return;
 
-    const phaseLabel = PHASE_LABELS[progress.phase] || progress.phase;
-    this.fileEl.setText(progress.currentFile ? `${phaseLabel}：${progress.currentFile}` : phaseLabel);
+    const label = phaseLabel(progress.phase);
+    this.fileEl.setText(progress.currentFile
+      ? t('progress.phaseJoin', { phase: label, file: progress.currentFile })
+      : label);
 
     if (progress.indeterminate) {
       // 不定式：用 CSS 动画条 + 已耗时计数
@@ -93,7 +99,7 @@ export class ProgressModal extends Modal {
     this.elapsedEl.style.display = '';
     const tick = () => {
       const sec = Math.floor((Date.now() - this.indeterminateSince) / 1000);
-      this.elapsedEl.setText(`已等待 ${sec}s`);
+      this.elapsedEl.setText(t('progress.waited', { seconds: sec }));
     };
     tick();
     this.elapsedTimer = window.setInterval(tick, 1000);

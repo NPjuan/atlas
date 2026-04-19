@@ -1,4 +1,5 @@
 import React from 'react';
+import { t } from '../../i18n';
 
 // ============================================================
 // 空状态引导组件 — 完整流程 checklist
@@ -25,26 +26,28 @@ export function EmptyState({ isAIConfigured, hasSchema, providerLabel, folderLab
 
   return (
     <div className="mece-empty-state">
-      <h3>MECE 知识分类</h3>
-      <p>AI 分析你的笔记库，自动建立分类体系并完成归类。</p>
+      <h3>{t('empty.title')}</h3>
+      <p>{t('empty.subtitle')}</p>
 
       <div className="mece-empty-steps">
         <Step
           num={1}
           status={step1}
-          text="配置 AI 服务"
-          detail={isAIConfigured ? providerLabel : '接入 AI 服务并填写密钥'}
-          actionLabel={isAIConfigured ? '修改' : '去配置'}
+          text={t('empty.step1')}
+          detail={isAIConfigured
+            ? t('empty.step1DescConfigured', { provider: providerLabel })
+            : t('empty.step1DescNotConfigured')}
+          actionLabel={isAIConfigured ? t('empty.step1ActionModify') : t('empty.step1ActionGo')}
           onAction={onOpenSettings}
         />
         <Step
           num={2}
           status={step2}
-          text={`为「${folderLabel}」生成分类`}
+          text={t('empty.step2', { folder: folderLabel })}
           detail={isEmptyFolder
-            ? '当前范围还没有笔记，换一个范围或先添加一些笔记'
-            : 'AI 扫描此范围的笔记 → 生成分类框架 → 为每篇笔记推荐标签并确认'}
-          actionLabel={step2 === 'current' && !isEmptyFolder ? '开始' : undefined}
+            ? t('empty.step2EmptyFolder')
+            : t('empty.step2Desc')}
+          actionLabel={step2 === 'current' && !isEmptyFolder ? t('empty.step2Start') : undefined}
           onAction={onGenerateSchema}
         />
       </div>
@@ -52,7 +55,7 @@ export function EmptyState({ isAIConfigured, hasSchema, providerLabel, folderLab
       {onChooseFolder && (
         <div className="mece-empty-footer">
           <button className="mece-btn mece-btn-subtle" onClick={onChooseFolder}>
-            换一个范围
+            {t('empty.chooseFolder')}
           </button>
         </div>
       )}

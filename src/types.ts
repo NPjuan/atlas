@@ -156,6 +156,10 @@ export interface MECESettings {
   excludeDirs: string[];
   /** 单文件最大字数跳过阈值 */
   maxFileCharsSkip: number;
+
+  // -- i18n --
+  /** 界面语言：'auto' 跟随 Obsidian；'zh' / 'en' 强制 */
+  language: 'auto' | 'zh' | 'en';
 }
 
 /** 默认设置 */
@@ -187,6 +191,7 @@ export const DEFAULT_SETTINGS: MECESettings = {
   autoOrganizeFilesAfterTagging: true,
   excludeDirs: ['templates', 'daily', '.obsidian', 'attachments'],
   maxFileCharsSkip: 50000,
+  language: 'auto',
 };
 
 /** 创建空 Store */

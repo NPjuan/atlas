@@ -1,8 +1,21 @@
 import type { ClassificationMode, TaxonomySchema, NoteOverview } from '../types';
+import { getLocale } from '../i18n';
 
 // ============================================================
 // V3 Prompt 模板 — Schema 生成 + 约束式打标签 + 开放式打标签
 // ============================================================
+
+/**
+ * 给 AI 的语言指令。所有 prompt 末尾拼上这段，让分类名 / 建议的新分类
+ * 跟用户设定的界面语言对齐。
+ */
+export function languageDirective(): string {
+  const locale = getLocale();
+  if (locale === 'en') {
+    return '\n\n---\nIMPORTANT: All category names, descriptions and natural-language output MUST be in English, regardless of the language of the input notes.';
+  }
+  return '\n\n---\n重要：所有分类名称、描述以及任何自然语言输出都必须用中文（简体），无论输入笔记是什么语言。';
+}
 
 const MODE_DESCRIPTIONS: Record<ClassificationMode, string> = {
   mece: 'MECE（Mutually Exclusive, Collectively Exhaustive）互斥穷尽分类：每个分类代表一个独立维度，分类之间不重叠，整体覆盖全部内容',
@@ -65,7 +78,7 @@ ${modeDesc}
 
 ## 笔记内容（共 ${notes.length} 篇）
 
-${notesSummary}`;
+${notesSummary}` + languageDirective();
 }
 
 // ============================================================
@@ -148,7 +161,7 @@ ${INTENSITY_RULES[intensity]}
 
 文件名：${sourceFile}
 
-${content}`;
+${content}` + languageDirective();
 }
 
 // ============================================================
@@ -285,7 +298,7 @@ ${INTENSITY_RULES[intensity]}
 
 ## 笔记清单
 
-${notesBlock}`;
+${notesBlock}` + languageDirective();
 }
 // 3. 开放式打标签 Prompt（无 Schema 时降级使用，V2 兼容）
 // ============================================================
@@ -336,7 +349,7 @@ ${modeDesc}
 文件名：${sourceFile}
 
 ## 笔记内容
-${content}`;
+${content}` + languageDirective();
 }
 
 // ============================================================
@@ -401,7 +414,7 @@ ${truncated}`;
 
 ## 笔记清单
 
-${notesBlock}`;
+${notesBlock}` + languageDirective();
 }
 
 // ============================================================
@@ -477,5 +490,5 @@ ${folderHintBlock}${existingBlock}
 
 ## 笔记摘要
 
-${notesBlock}`;
+${notesBlock}` + languageDirective();
 }

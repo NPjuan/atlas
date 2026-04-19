@@ -3,6 +3,7 @@ import { createRoot, Root } from 'react-dom/client';
 import { createElement } from 'react';
 import type MECEPlugin from '../main';
 import { TagMapPanel } from '../ui/components/TagMapPanel';
+import { t } from '../i18n';
 
 export const TAG_MAP_VIEW_TYPE = 'mece-tag-map-view';
 
@@ -24,8 +25,8 @@ export class TagMapView extends ItemView {
   }
 
   getViewType(): string { return TAG_MAP_VIEW_TYPE; }
-  getDisplayText(): string { return 'Atlas 知识整理'; }
-  getIcon(): string { return 'folder-tree'; }
+  getDisplayText(): string { return t('view.displayName'); }
+  getIcon(): string { return 'wand-2'; }
 
   async onOpen(): Promise<void> {
     const container = this.containerEl.children[1] as HTMLElement;

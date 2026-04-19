@@ -3,6 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import type { FileMoveAction, ConflictResolution } from '../../core/file-organizer';
 import { resolveConflict, computeTargetPath, extractFileName } from '../../core/file-organizer';
+import { t, useLocale } from '../../i18n';
 
 /** setIcon 脱管 DOM 小工具 */
 function Icon({ name, size = 14 }: { name: string; size?: number }) {
@@ -50,6 +51,7 @@ interface ActionState extends FileMoveAction {
 }
 
 function FileMoveReviewApp({ actions, onApply, onCancel }: FileMoveReviewProps) {
+  useLocale();
   const [items, setItems] = useState<ActionState[]>(() =>
     actions.map(a => ({
       ...a,
@@ -92,57 +94,57 @@ function FileMoveReviewApp({ actions, onApply, onCancel }: FileMoveReviewProps) 
   // 分组统计
   const needsMove = items.filter(it => !it.alreadyInPlace).length;
   const alreadyOk = items.filter(it => it.alreadyInPlace).length;
-  const conflictCount = items.filter(it => it.hasNameConflict).length;
-  const multiTagCount = items.filter(it => it.needsUserPickTag).length;
+  // 多 tag / 冲突统计：只关心"本次真的要动"的那批，已在位的不计入
+  const conflictCount = items.filter(it => !it.alreadyInPlace && it.hasNameConflict).length;
+  const multiTagCount = items.filter(it => !it.alreadyInPlace && it.needsUserPickTag).length;
 
   return (
     <div className="mece-file-move-review">
       <div className="mece-pr-header">
         <h3>
           <Icon name="folder-tree" size={16} />
-          <span>按分类整理文件夹</span>
+          <span>{t('fileMove.title')}</span>
         </h3>
         <p className="mece-pr-desc">
-          笔记将按照 tag 路径移动到对应文件夹。这个操作会移动文件本身，<strong>请仔细核对</strong>。
+          {t('fileMove.desc')}<strong>{t('fileMove.descWarn')}</strong>
         </p>
       </div>
 
       <div className="mece-pr-stats-bar">
         <span className="mece-pr-stat mece-pr-stat-highlight">
           <Icon name="arrow-right" size={12} />
-          <span>{needsMove} 个文件待迁移</span>
+          <span>{t('fileMove.statNeedsMove', { count: needsMove })}</span>
         </span>
         {alreadyOk > 0 && (
           <span className="mece-pr-stat mece-pr-stat-muted">
             <Icon name="check" size={12} />
-            <span>{alreadyOk} 个已在正确位置</span>
+            <span>{t('fileMove.statAlreadyOk', { count: alreadyOk })}</span>
           </span>
         )}
         {multiTagCount > 0 && (
           <span className="mece-pr-stat mece-pr-stat-new">
             <Icon name="split" size={12} />
-            <span>{multiTagCount} 个多 tag 需选主路径</span>
+            <span>{t('fileMove.statMultiTag', { count: multiTagCount })}</span>
           </span>
         )}
         {conflictCount > 0 && (
           <span className="mece-pr-stat mece-pr-stat-new">
             <Icon name="alert-triangle" size={12} />
-            <span>{conflictCount} 个名称冲突</span>
+            <span>{t('fileMove.statConflict', { count: conflictCount })}</span>
           </span>
         )}
       </div>
 
       <div className="mece-fm-list">
+        {needsMove === 0 && (
+          <div className="mece-fm-empty">
+            <Icon name="check-circle" size={16} />
+            <span>{t('fileMove.emptyNothingToMove')}</span>
+          </div>
+        )}
         {items.map((it, idx) => {
-          if (it.alreadyInPlace) {
-            return (
-              <div key={idx} className="mece-fm-item mece-fm-item-skip">
-                <Icon name="check" size={12} />
-                <span className="mece-fm-filename">{extractFileName(it.fromPath)}</span>
-                <span className="mece-fm-in-place">已在 {it.fromPath}</span>
-              </div>
-            );
-          }
+          // 已在正确位置的文件不展示（不会动的不占视觉空间，顶部统计条里仍有计数）
+          if (it.alreadyInPlace) return null;
           return (
             <div
               key={idx}
@@ -162,7 +164,7 @@ function FileMoveReviewApp({ actions, onApply, onCancel }: FileMoveReviewProps) 
 
                 {it.needsUserPickTag && (
                   <div className="mece-fm-multi-tag">
-                    <span className="mece-fm-hint">多 tag，选主路径：</span>
+                    <span className="mece-fm-hint">{t('fileMove.multiTagPrompt')}</span>
                     {it.allTags.map(tag => (
                       <label key={tag} className="mece-fm-tag-option">
                         <input
@@ -180,7 +182,7 @@ function FileMoveReviewApp({ actions, onApply, onCancel }: FileMoveReviewProps) 
                 {it.hasNameConflict && (
                   <div className="mece-fm-conflict">
                     <Icon name="alert-triangle" size={12} />
-                    <span className="mece-fm-hint">目标已存在同名文件：</span>
+                    <span className="mece-fm-hint">{t('fileMove.conflictPrompt')}</span>
                     {(['rename', 'overwrite', 'skip'] as ConflictResolution[]).map(s => (
                       <label key={s} className="mece-fm-conflict-option">
                         <input
@@ -189,7 +191,7 @@ function FileMoveReviewApp({ actions, onApply, onCancel }: FileMoveReviewProps) 
                           checked={it.conflictResolution === s}
                           onChange={() => setConflictStrategy(idx, s)}
                         />
-                        <span>{s === 'rename' ? '重命名加日期' : s === 'overwrite' ? '覆盖' : '跳过'}</span>
+                        <span>{s === 'rename' ? t('fileMove.conflictRename') : s === 'overwrite' ? t('fileMove.conflictOverwrite') : t('fileMove.conflictSkip')}</span>
                       </label>
                     ))}
                   </div>
@@ -201,13 +203,13 @@ function FileMoveReviewApp({ actions, onApply, onCancel }: FileMoveReviewProps) 
       </div>
 
       <div className="mece-pr-footer">
-        <button className="mece-btn" onClick={onCancel}>取消</button>
+        <button className="mece-btn" onClick={onCancel}>{t('fileMove.cancel')}</button>
         <button
           className="mece-btn mece-btn-primary"
           onClick={() => onApply(effectiveActions)}
           disabled={effectiveActions.length === 0}
         >
-          执行 {effectiveActions.length} 个迁移
+          {t('fileMove.confirmMove', { count: effectiveActions.length })}
         </button>
       </div>
     </div>

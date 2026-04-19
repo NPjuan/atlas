@@ -16,6 +16,7 @@ import {
   tagMatchesPath,
   tagIsUnderPath,
 } from '../../core/tag-ops';
+import { t, useLocale } from '../../i18n';
 
 // ============================================================
 // UnifiedOrganizer — 常驻笔记整理器
@@ -123,6 +124,7 @@ function loadNotes(
 // ---- 主组件 ----
 
 export function UnifiedOrganizer({ app, taxonomy, folderFilter, readOnly = false, onSchemaChange, onRootRename, onAIReorganize, onTagUntagged, onChooseFolder, onFileOpen, refreshKey = 0, fileSystemSync }: UnifiedOrganizerProps) {
+  useLocale();  // 订阅语言变化
   // 预先把 taxonomy 里所有节点的 fullPath 收集起来，供 loadNotes 做 tag 归一化
   const taxonomyFullPaths = useMemo(() => collectAllFullPaths(taxonomy.nodes), [taxonomy]);
 
@@ -511,12 +513,12 @@ export function UnifiedOrganizer({ app, taxonomy, folderFilter, readOnly = false
     }
   };
   const handleAddChild = (parentId: string) => {
-    const child: TaxonomyNode = { id: genId(), name: '新分类', fullPath: '', children: [] };
+    const child: TaxonomyNode = { id: genId(), name: t('schema.newCategory'), fullPath: '', children: [] };
     emitNodes(insertChild(nodes, parentId, child));
     setExpanded(prev => new Set([...prev, parentId]));
   };
   const handleAddRoot = () => {
-    const child: TaxonomyNode = { id: genId(), name: '新分类', fullPath: '', children: [] };
+    const child: TaxonomyNode = { id: genId(), name: t('schema.newCategory'), fullPath: '', children: [] };
     emitNodes([...nodes, child]);
   };
   const handleExpandAll = () => {
@@ -670,7 +672,7 @@ export function UnifiedOrganizer({ app, taxonomy, folderFilter, readOnly = false
         <input
           type="text"
           className="mece-organizer-search"
-          placeholder="搜索笔记或分类..."
+          placeholder={t('organizer.searchPlaceholder')}
           value={query}
           onChange={(e) => setQuery(e.target.value)}
         />
@@ -678,11 +680,11 @@ export function UnifiedOrganizer({ app, taxonomy, folderFilter, readOnly = false
           <button
             className="mece-organizer-folder-btn"
             onClick={onChooseFolder}
-            aria-label={folderFilter ? `当前范围：${folderFilter}` : '选择范围：整个 Vault'}
+            aria-label={folderFilter ? folderFilter : t('organizer.chooseFolderScope')}
           >
             <Icon name="folder" size={13} />
             <span className="mece-organizer-folder-btn-label">
-              {folderFilter ? (folderFilter.split('/').pop() || folderFilter) : '整个 Vault'}
+              {folderFilter ? (folderFilter.split('/').pop() || folderFilter) : t('organizer.folderRoot')}
             </span>
           </button>
         )}
@@ -698,7 +700,7 @@ export function UnifiedOrganizer({ app, taxonomy, folderFilter, readOnly = false
         {/* 分类树 */}
         <div className="mece-organizer-tree">
           <RootNode
-            rootName={taxonomy.rootName || '全部'}
+            rootName={taxonomy.rootName || t('organizer.folderRoot')}
             totalNotes={notes.length}
             readOnly={readOnly}
             draggingFile={draggingFile}
@@ -710,7 +712,7 @@ export function UnifiedOrganizer({ app, taxonomy, folderFilter, readOnly = false
             onCollapseAll={handleCollapseAll}
           >
             {nodes.length === 0 ? (
-              <div className="mece-organizer-empty">暂无分类，点击「+」添加</div>
+              <div className="mece-organizer-empty">{t('organizer.emptyTree')}</div>
             ) : (
               nodes.map(node => (
                 <CategoryNode
@@ -752,16 +754,16 @@ export function UnifiedOrganizer({ app, taxonomy, folderFilter, readOnly = false
       >
         <div className="mece-organizer-unassigned-title">
           <span className="mece-organizer-unassigned-label">
-            未分类 <span className="mece-organizer-count">{unassigned.length}</span>
+            {t('organizer.unassigned')} <span className="mece-organizer-count">{unassigned.length}</span>
           </span>
           {onTagUntagged && unassigned.length > 0 && (
             <button
               className="mece-toolbar-btn mece-organizer-unassigned-tag-btn"
               onClick={() => onTagUntagged(unassigned.map(n => n.file))}
-              title="让 AI 分析这些未分类笔记并建议归类（会有二次确认）"
+              title={t('organizer.aiTagUnassigned')}
             >
               <Icon name="wand-sparkles" size={12} />
-              <span>AI 归类</span>
+              <span>{t('organizer.aiTag')}</span>
             </button>
           )}
         </div>
@@ -778,7 +780,7 @@ export function UnifiedOrganizer({ app, taxonomy, folderFilter, readOnly = false
             ))}
           </div>
         ) : (
-          <div className="mece-organizer-unassigned-empty">所有笔记已分类</div>
+          <div className="mece-organizer-unassigned-empty">{t('organizer.allCategorized')}</div>
         )}
       </div>
     </div>
@@ -898,14 +900,14 @@ function CategoryNode(props: CategoryNodeProps) {
 
         {!readOnly && (
           <div className="mece-organizer-ops">
-            <button className="mece-organizer-op" onClick={(e) => { e.stopPropagation(); setEditing(true); setEditValue(node.name); }} title="重命名">
+            <button className="mece-organizer-op" onClick={(e) => { e.stopPropagation(); setEditing(true); setEditValue(node.name); }} title={t('common.rename')}>
               <Icon name="pencil" size={12} />
             </button>
             {canAddChild && (
               <button
                 className="mece-organizer-op mece-organizer-op-add"
                 onClick={(e) => { e.stopPropagation(); onAddChild(node.id); }}
-                title="添加子分类"
+                title={t('organizer.addChild')}
               >
                 <Icon name="plus" size={12} />
               </button>
@@ -913,7 +915,7 @@ function CategoryNode(props: CategoryNodeProps) {
             <button
               className="mece-organizer-op mece-organizer-op-del"
               onClick={(e) => { e.stopPropagation(); onDelete(node.id); }}
-              title="删除"
+              title={t('common.delete')}
             >
               <Icon name="trash-2" size={12} />
             </button>
@@ -1031,7 +1033,7 @@ function RootNode({ rootName, totalNotes, readOnly = false, draggingFile, dragOv
           <span
             className="mece-organizer-root-name"
             onDoubleClick={() => { if (!readOnly) { setEditing(true); setEditValue(rootName); } }}
-            title={readOnly ? rootName : '双击重命名'}
+            title={readOnly ? rootName : t('organizer.renameDoubleClick')}
           >
             {rootName}
           </span>
@@ -1039,22 +1041,22 @@ function RootNode({ rootName, totalNotes, readOnly = false, draggingFile, dragOv
         {!readOnly && (
           <div className="mece-organizer-ops mece-organizer-root-ops">
             {onExpandAll && (
-              <button className="mece-organizer-op" onClick={(e) => { e.stopPropagation(); onExpandAll(); }} title="展开全部">
+              <button className="mece-organizer-op" onClick={(e) => { e.stopPropagation(); onExpandAll(); }} title={t('organizer.expandAll')}>
                 <Icon name="chevrons-up-down" size={12} />
               </button>
             )}
             {onCollapseAll && (
-              <button className="mece-organizer-op" onClick={(e) => { e.stopPropagation(); onCollapseAll(); }} title="折叠全部">
+              <button className="mece-organizer-op" onClick={(e) => { e.stopPropagation(); onCollapseAll(); }} title={t('organizer.collapseAll')}>
                 <Icon name="chevrons-down-up" size={12} />
               </button>
             )}
-            <button className="mece-organizer-op" onClick={(e) => { e.stopPropagation(); setEditing(true); setEditValue(rootName); }} title="重命名">
+            <button className="mece-organizer-op" onClick={(e) => { e.stopPropagation(); setEditing(true); setEditValue(rootName); }} title={t('common.rename')}>
               <Icon name="pencil" size={12} />
             </button>
             <button
               className="mece-organizer-op mece-organizer-op-add"
               onClick={(e) => { e.stopPropagation(); onAddChild(); }}
-              title="添加一级分类"
+              title={t('organizer.addSubcategory')}
             >
               <Icon name="plus" size={12} />
             </button>

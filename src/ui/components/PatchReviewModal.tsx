@@ -2,6 +2,7 @@ import { App, Modal, Notice, setIcon } from 'obsidian';
 import React, { useState, useEffect, useRef } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import type { TagPatch, TagPatchList, SuggestedCategory } from '../../types';
+import { t as tr, useLocale } from '../../i18n';
 
 // ============================================================
 // Patch Review Modal — React 版 git-diff 风格审核
@@ -118,7 +119,7 @@ function PatchItem({
                     className={`mece-pr-tag mece-pr-tag-added ${newCategoryPaths.has(t) ? 'mece-pr-tag-new-category' : ''}`}
                   >
                     {t}
-                    {newCategoryPaths.has(t) && <span className="mece-pr-tag-new-badge">新</span>}
+                    {newCategoryPaths.has(t) && <span className="mece-pr-tag-new-badge">{tr('review.newBadge')}</span>}
                   </span>
                 ))}
               </div>
@@ -131,6 +132,7 @@ function PatchItem({
 }
 
 function PatchReviewApp({ patchList, onApply, onCancel }: PatchReviewAppProps) {
+  useLocale();
   // 默认全部勾选（AI 的建议默认接受，用户只需反选不认可的）
   const changesOnly = patchList.patches
     .filter(p => p.hasChanges)
@@ -153,7 +155,7 @@ function PatchReviewApp({ patchList, onApply, onCancel }: PatchReviewAppProps) {
   const groups = React.useMemo(() => {
     const map = new Map<string, number[]>();  // path → patch indices
     patches.forEach((p, i) => {
-      const key = p.newTags[0] || '(无分类)';
+      const key = p.newTags[0] || tr('review.uncategorized');
       if (!map.has(key)) map.set(key, []);
       map.get(key)!.push(i);
     });
@@ -199,10 +201,10 @@ function PatchReviewApp({ patchList, onApply, onCancel }: PatchReviewAppProps) {
       <div className="mece-pr-header">
         <h3>
           <Icon name="clipboard-list" size={16} />
-          <span>归类预览</span>
+          <span>{tr('review.title')}</span>
         </h3>
         <p className="mece-pr-desc">
-          勾选你认可的归类。<strong className="mece-pr-new-hint">带「新」徽章</strong>的分类在当前 Schema 中尚不存在，接受时会自动纳入 Schema。
+          {tr('review.desc')}
         </p>
       </div>
 
@@ -210,22 +212,22 @@ function PatchReviewApp({ patchList, onApply, onCancel }: PatchReviewAppProps) {
       <div className="mece-pr-stats-bar">
         <span className="mece-pr-stat">
           <Icon name="file-text" size={12} />
-          <span>{patchList.stats.totalFiles} 文件扫描</span>
+          <span>{tr('review.statFilesScanned', { count: patchList.stats.totalFiles })}</span>
         </span>
         <span className="mece-pr-stat mece-pr-stat-highlight">
           <Icon name="sparkles" size={12} />
-          <span>{patchList.stats.filesWithChanges} 文件有变更</span>
+          <span>{tr('review.statFilesChanged', { count: patchList.stats.filesWithChanges })}</span>
         </span>
         {patchList.suggestedCategories.length > 0 && (
           <span className="mece-pr-stat mece-pr-stat-new">
             <Icon name="plus-circle" size={12} />
-            <span>{patchList.suggestedCategories.length} 个新分类待纳入</span>
+            <span>{tr('review.statNewCategories', { count: patchList.suggestedCategories.length })}</span>
           </span>
         )}
         {patchList.stats.skippedFiles > 0 && (
           <span className="mece-pr-stat mece-pr-stat-muted">
             <Icon name="skip-forward" size={12} />
-            <span>{patchList.stats.skippedFiles} 跳过</span>
+            <span>{tr('review.statSkipped', { count: patchList.stats.skippedFiles })}</span>
           </span>
         )}
       </div>
@@ -237,20 +239,20 @@ function PatchReviewApp({ patchList, onApply, onCancel }: PatchReviewAppProps) {
           onClick={() => setViewMode('by-category')}
         >
           <Icon name="folder-tree" size={12} />
-          <span>按分类</span>
+          <span>{tr('review.byCategory')}</span>
         </button>
         <button
           className={`mece-pr-tab ${viewMode === 'by-file' ? 'mece-pr-tab-active' : ''}`}
           onClick={() => setViewMode('by-file')}
         >
           <Icon name="file-text" size={12} />
-          <span>按文件</span>
+          <span>{tr('review.byFile')}</span>
         </button>
         <div className="mece-pr-tabs-right">
-          <button className="mece-btn-sm" onClick={selectAll}>全选</button>
-          <button className="mece-btn-sm" onClick={selectNone}>全不选</button>
+          <button className="mece-btn-sm" onClick={selectAll}>{tr('review.selectAll')}</button>
+          <button className="mece-btn-sm" onClick={selectNone}>{tr('review.deselectAll')}</button>
           <span className="mece-pr-summary">
-            {acceptedPatches.length}/{patches.length} 文件
+            {tr('review.filesSummary', { accepted: acceptedPatches.length, total: patches.length })}
           </span>
         </div>
       </div>
@@ -258,7 +260,7 @@ function PatchReviewApp({ patchList, onApply, onCancel }: PatchReviewAppProps) {
       {/* 列表 */}
       <div className="mece-pr-list">
         {patches.length === 0 ? (
-          <p className="mece-pr-empty">所有文件的标签已是最新</p>
+          <p className="mece-pr-empty">{tr('review.noFilesToUpdate')}</p>
         ) : viewMode === 'by-file' ? (
           patches.map((patch, idx) => (
             <PatchItem
@@ -292,15 +294,15 @@ function PatchReviewApp({ patchList, onApply, onCancel }: PatchReviewAppProps) {
                   <button
                     className="mece-pr-group-toggle"
                     onClick={() => toggleGroupCollapse(path)}
-                    aria-label={collapsed ? '展开' : '折叠'}
+                    aria-label={collapsed ? tr('review.expand') : tr('review.collapse')}
                   >
                     <Icon name={collapsed ? 'chevron-right' : 'chevron-down'} size={12} />
                   </button>
                   <span className={`mece-pr-group-path ${isNewCategory ? 'mece-pr-group-path-new' : ''}`}>
                     {path}
-                    {isNewCategory && <span className="mece-pr-tag-new-badge">新</span>}
+                    {isNewCategory && <span className="mece-pr-tag-new-badge">{tr('review.newBadge')}</span>}
                   </span>
-                  <span className="mece-pr-group-count">{acceptedInGroup}/{total} 篇</span>
+                  <span className="mece-pr-group-count">{tr('review.groupCount', { accepted: acceptedInGroup, total })}</span>
                 </div>
                 {!collapsed && (
                   <div className="mece-pr-group-body">
@@ -324,14 +326,14 @@ function PatchReviewApp({ patchList, onApply, onCancel }: PatchReviewAppProps) {
 
       {/* 底部 */}
       <div className="mece-pr-footer">
-        <button className="mece-btn" onClick={onCancel}>取消</button>
+        <button className="mece-btn" onClick={onCancel}>{tr('review.cancel')}</button>
         <button
           className="mece-btn mece-btn-primary"
           onClick={() => onApply(acceptedPatches, acceptedCategories)}
           disabled={acceptedPatches.length === 0}
         >
-          应用 {acceptedPatches.length} 项变更
-          {newCategoriesCount > 0 && <span className="mece-btn-sublabel">（含 {newCategoriesCount} 个新分类）</span>}
+          {tr('review.apply', { count: acceptedPatches.length })}
+          {newCategoriesCount > 0 && <span className="mece-btn-sublabel">{tr('review.applyWithNewCats', { count: newCategoriesCount })}</span>}
         </button>
       </div>
     </div>

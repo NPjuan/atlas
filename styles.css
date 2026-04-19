@@ -2056,6 +2056,16 @@
   padding: 4px;
 }
 
+.mece-fm-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 32px 16px;
+  color: var(--text-muted);
+  font-size: 13px;
+}
+
 .mece-fm-item {
   display: flex;
   gap: 10px;

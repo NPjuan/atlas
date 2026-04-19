@@ -3,6 +3,7 @@ import React, { useState } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import type { TaxonomySchema, TaxonomyNode } from '../../types';
 import { SchemaTree } from './SchemaTree';
+import { t, useLocale } from '../../i18n';
 
 // ============================================================
 // Schema 编辑器 Modal — Obsidian Modal + React 组件
@@ -18,19 +19,20 @@ interface SchemaEditorAppProps {
 }
 
 function SchemaEditorApp({ initialNodes, maxDepth: initMaxDepth, noteCountMap, onConfirm, onCancel, onRegenerate }: SchemaEditorAppProps) {
+  useLocale();
   const [nodes, setNodes] = useState<TaxonomyNode[]>(initialNodes);
   const [maxDepth, setMaxDepth] = useState(initMaxDepth);
 
   return (
     <div className="mece-schema-editor">
       <div className="mece-schema-editor-header">
-        <h3>分类体系编辑器</h3>
+        <h3>{t('schema.editTitle')}</h3>
         <div className="mece-schema-editor-config">
           <label>
-            最大层级：
+            {t('schema.maxDepthLabel')}
             <select value={maxDepth} onChange={(e) => setMaxDepth(parseInt(e.target.value))}>
-              <option value={2}>2 层</option>
-              <option value={3}>3 层</option>
+              <option value={2}>{t('schema.maxDepth2')}</option>
+              <option value={3}>{t('schema.maxDepth3')}</option>
             </select>
           </label>
         </div>
@@ -44,10 +46,10 @@ function SchemaEditorApp({ initialNodes, maxDepth: initMaxDepth, noteCountMap, o
       />
 
       <div className="mece-schema-editor-footer">
-        <button className="mece-btn" onClick={onCancel}>取消</button>
-        <button className="mece-btn" onClick={onRegenerate}>AI 重新生成</button>
+        <button className="mece-btn" onClick={onCancel}>{t('schema.cancel')}</button>
+        <button className="mece-btn" onClick={onRegenerate}>{t('schema.regenerate')}</button>
         <button className="mece-btn mece-btn-primary" onClick={() => onConfirm(nodes, maxDepth)}>
-          确认
+          {t('schema.confirm')}
         </button>
       </div>
     </div>

@@ -3,10 +3,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { createRoot, Root } from 'react-dom/client';
 import type MECEPlugin from '../../main';
 import type { ReorganizeIntensity } from '../../ai/prompts';
+import { t, useLocale } from '../../i18n';
 
 // ============================================================
 // ReorganizeModal — 增量重新归类配置
-// 让用户选择范围（文件夹）和调整强度，然后触发 AI 归类
+// 让用户选择范围（文件夹）和调整强度，然后触发归类
 // ============================================================
 
 interface ReorganizeAppProps {
@@ -16,22 +17,8 @@ interface ReorganizeAppProps {
   onCancel: () => void;
 }
 
-const INTENSITY_LABELS: Record<ReorganizeIntensity, { label: string; desc: string }> = {
-  conservative: {
-    label: '保守',
-    desc: '尽量保留现有标签，只改明显错位的笔记',
-  },
-  balanced: {
-    label: '平衡',
-    desc: '合理保留原有，适度调整到更精准分类',
-  },
-  aggressive: {
-    label: '重构',
-    desc: '忽略现有标签，按内容重新判断',
-  },
-};
-
 function ReorganizeApp({ plugin, defaultFolder, onStart, onCancel }: ReorganizeAppProps) {
+  useLocale();
   const [folderPath, setFolderPath] = useState<string | undefined>(defaultFolder);
   const [intensity, setIntensity] = useState<ReorganizeIntensity>(
     (plugin.settings.defaultReorganizeIntensity as ReorganizeIntensity) || 'conservative',
@@ -43,23 +30,28 @@ function ReorganizeApp({ plugin, defaultFolder, onStart, onCancel }: ReorganizeA
     .map(f => f.path)
     .sort();
 
+  const intensityLabels: Record<ReorganizeIntensity, { label: string; desc: string }> = {
+    conservative: { label: t('reorganize.intensityConservative'), desc: t('reorganize.intensityConservativeDesc') },
+    balanced:     { label: t('reorganize.intensityBalanced'),     desc: t('reorganize.intensityBalancedDesc') },
+    aggressive:   { label: t('reorganize.intensityAggressive'),   desc: t('reorganize.intensityAggressiveDesc') },
+  };
+
   return (
     <div className="mece-reorganize">
-      <h3>AI 智能归类</h3>
+      <h3>{t('reorganize.title')}</h3>
       <p className="mece-reorganize-desc">
-        基于当前分类体系，让 AI 分析笔记应归入哪个分类。<br />
-        不会修改分类结构，只调整笔记的标签。
+        {t('reorganize.desc')}
       </p>
 
       {/* 范围 */}
       <div className="mece-reorganize-field">
-        <label>范围</label>
+        <label>{t('reorganize.scopeLabel')}</label>
         <select
           value={folderPath ?? ''}
           onChange={(e) => setFolderPath(e.target.value || undefined)}
           className="mece-reorganize-select"
         >
-          <option value="">整个 Vault</option>
+          <option value="">{t('empty.wholeVault')}</option>
           {folders.map(f => (
             <option key={f} value={f}>{f}</option>
           ))}
@@ -68,7 +60,7 @@ function ReorganizeApp({ plugin, defaultFolder, onStart, onCancel }: ReorganizeA
 
       {/* 强度 */}
       <div className="mece-reorganize-field">
-        <label>调整强度</label>
+        <label>{t('reorganize.intensityLabel')}</label>
         <div className="mece-reorganize-intensity-group">
           {(['conservative', 'balanced', 'aggressive'] as ReorganizeIntensity[]).map(key => (
             <button
@@ -77,8 +69,8 @@ function ReorganizeApp({ plugin, defaultFolder, onStart, onCancel }: ReorganizeA
               onClick={() => setIntensity(key)}
               type="button"
             >
-              <div className="mece-reorganize-intensity-label">{INTENSITY_LABELS[key].label}</div>
-              <div className="mece-reorganize-intensity-desc">{INTENSITY_LABELS[key].desc}</div>
+              <div className="mece-reorganize-intensity-label">{intensityLabels[key].label}</div>
+              <div className="mece-reorganize-intensity-desc">{intensityLabels[key].desc}</div>
             </button>
           ))}
         </div>
@@ -86,12 +78,12 @@ function ReorganizeApp({ plugin, defaultFolder, onStart, onCancel }: ReorganizeA
 
       {/* 底部 */}
       <div className="mece-reorganize-footer">
-        <button className="mece-btn" onClick={onCancel}>取消</button>
+        <button className="mece-btn" onClick={onCancel}>{t('reorganize.cancel')}</button>
         <button
           className="mece-btn mece-btn-primary"
           onClick={() => onStart(folderPath, intensity)}
         >
-          开始分析
+          {t('reorganize.start')}
         </button>
       </div>
     </div>

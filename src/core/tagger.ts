@@ -169,7 +169,10 @@ export async function generatePatches(
 
     const hash = simpleHash(content);
     const existing = store.processedFiles[file.path];
-    if (existing && existing.hash === hash) {
+    const currentTags = getFileTagsFromContent(content);
+    // 跳过条件：hash 一致 + 确实有 tag（未分类笔记即使 hash 命中也要重新分析，
+    // 否则"tags 为空但 processedFiles 有记录"的笔记将永远无法被归类）
+    if (existing && existing.hash === hash && currentTags.length > 0) {
       skippedFiles++;
       processed++;
       onProgress?.({
@@ -187,7 +190,7 @@ export async function generatePatches(
 
     prepared.push({
       file, content, hash,
-      oldTags: getFileTagsFromContent(content),
+      oldTags: currentTags,
       summary: cachedSummary,
     });
   }
