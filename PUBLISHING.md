@@ -6,7 +6,7 @@
 
 ### 1. 确认 GitHub 仓库
 
-- 仓库名：`NPjuan/obsidian-mece`（与 manifest.json 的 id 对齐）
+- 仓库名：`NPjuan/atlas`（与 manifest.json 的 id 对齐）
 - 默认分支：`main`
 - 仓库设为 public
 
@@ -58,7 +58,7 @@ git push --tags
   "name": "Atlas - AI Knowledge Categorizer",
   "author": "ekkopan",
   "description": "Let AI organize your notes into a clean taxonomy and auto-sort them into folders. Build a living map of your knowledge.",
-  "repo": "NPjuan/obsidian-mece"
+  "repo": "NPjuan/atlas"
 }
 ```
 

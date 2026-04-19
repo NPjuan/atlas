@@ -15,12 +15,12 @@
   "author": "ekkopan",
   "repository": {
     "type": "git",
-    "url": "https://github.com/NPjuan/obsidian-mece.git"
+    "url": "https://github.com/NPjuan/atlas.git"
   },
   "bugs": {
-    "url": "https://github.com/NPjuan/obsidian-mece/issues"
+    "url": "https://github.com/NPjuan/atlas/issues"
   },
-  "homepage": "https://github.com/NPjuan/obsidian-mece#readme",
+  "homepage": "https://github.com/NPjuan/atlas#readme",
   "keywords": ["obsidian", "obsidian-plugin", "ai", "taxonomy", "knowledge-management"],
   "devDependencies": {
     "@types/d3": "^7.4.3",
