@@ -5,6 +5,9 @@ node_modules/
 main.js
 main.js.map
 
+# Release packages (built on demand, should not live in repo)
+atlas-knowledge-*.zip
+
 # Plugin dev output
 *.log
 
